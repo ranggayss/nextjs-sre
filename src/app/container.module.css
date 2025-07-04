@@ -1,0 +1,11 @@
+.responsiveContainer {
+  max-width: 100%;
+
+  @media (min-width: em(400px)) {
+    max-width: 100%;
+  }
+
+  @media (min-width: em(600px)) {
+    max-width: 100%;
+  }
+}

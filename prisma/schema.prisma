@@ -1,129 +1,151 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Article {
-  id    Int  @id  @default(autoincrement()) 
-  title  String
-  filePath  String
-  nodes    Node[]
-  edges    Edge[]
-
-  annotations Annotation[]
-  userId  Int?
-  user  User? @relation(fields: [userId], references:[id])
-
-  createdAt DateTime  @default(now())
-  updateAt  DateTime  @updatedAt
+  id                   String                @id
+  title                String
+  filePath             String
+  createdAt            DateTime              @default(now())
+  updateAt             DateTime              @updatedAt
+  userId               String?
+  sessionId            String?
+  annotations          Annotation[]
+  BrainstormingSession BrainstormingSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user                 User?                 @relation(fields: [userId], references: [id])
+  edges                Edge[]
+  nodes                Node[]
 }
 
 model Node {
-  id      Int @id @default(autoincrement())
-  label   String
-  title   String? // nullable
-  att_goal  String? // nullable
-  att_method  String? // nullable
-  att_background  String? // nullable
-  att_future  String? // nullable
-  att_gaps  String? // nullable
-  att_url  String? // nullable
-  type    String
-  content String
-
-  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  articleId Int
-
-  fromEdges Edge[]  @relation("EdgeFrom")
-  toEdges Edge[]  @relation("EdgeTo")
+  id             String  @id
+  label          String
+  title          String?
+  att_goal       String?
+  att_method     String?
+  att_background String?
+  att_future     String?
+  att_gaps       String?
+  att_url        String?
+  type           String
+  content        String
+  articleId      String
+  fromEdges      Edge[]  @relation("EdgeFrom")
+  toEdges        Edge[]  @relation("EdgeTo")
+  article        Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
 }
 
 model Edge {
-  id      Int  @id  @default(autoincrement())
-  fromId    Int 
-  toId      Int
+  id        String  @id
+  fromId    String
+  toId      String
   relation  String?
   label     String?
   color     String?
-
-  from      Node  @relation("EdgeFrom" ,fields: [fromId], references: [id], onDelete: Cascade)
-  to      Node  @relation("EdgeTo", fields: [toId], references: [id], onDelete: Cascade)
-
+  articleId String
   article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  articleId  Int
+  from      Node    @relation("EdgeFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to        Node    @relation("EdgeTo", fields: [toId], references: [id], onDelete: Cascade)
 
   @@unique([fromId, toId, relation])
 }
 
 model Analytics {
-  id  Int  @id @default(autoincrement())
-  action  String
+  id        Int      @id @default(autoincrement())
+  action    String
   document  String?
-  userId  String?
+  userId    String?
   metadata  Json?
   timestamp DateTime @default(now())
 
   @@map("analytics")
 }
 
-enum Role{
-  USER
-  ADMIN
-}
-
 model User {
-  id  Int @id @default(autoincrement())
-  email String  @unique
-  name  String?
-  password  String
-  role  Role  @default(USER)
-  createdAt DateTime  @default(now())
-  updateAt  DateTime  @updatedAt
-
-  articles  Article[]
-  drafts  Draft[]
-  annotations Annotation[]
+  id                   String                 @id
+  email                String                 @unique
+  name                 String?
+  password             String
+  role                 Role                   @default(USER)
+  createdAt            DateTime               @default(now())
+  updateAt             DateTime               @updatedAt
+  group                String?
+  nim                  String?
+  annotations          Annotation[]
+  articles             Article[]
+  BrainstormingSession BrainstormingSession[]
+  drafts               Draft[]
 }
 
 model Draft {
-  id  Int @id @default(autoincrement())
-  userId  Int?
-  user  User? @relation(fields: [userId], references: [id])
-  title String
+  id        String         @id
+  userId    String?
+  title     String
+  createdAt DateTime       @default(now())
+  user      User?          @relation(fields: [userId], references: [id])
   sections  DraftSection[]
-  createdAt DateTime  @default(now())
 }
 
 model DraftSection {
-  id  Int @id @default(autoincrement())
-  draftId Int
-  draft Draft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  title String
-  content String
+  id          String       @id
+  draftId     String
+  title       String
+  content     String
   annotations Annotation[]
+  draft       Draft        @relation(fields: [draftId], references: [id], onDelete: Cascade)
 }
 
 model Annotation {
-  id  Int @id @default(autoincrement())
-  userId Int? 
-  user User?  @relation(fields: [userId], references: [id])
-  articleId  Int?
-  article Article? @relation(fields: [articleId], references: [id])
-  page  Int
+  id              String        @id
+  userId          String?
+  articleId       String?
+  page            Int
   highlightedText String
-  comment String
-  semanticTag String?
-  draftSectionId  Int?
-  draftSection  DraftSection? @relation(fields: [draftSectionId], references: [id])
-  createdAt DateTime  @default(now())
+  comment         String
+  semanticTag     String?
+  draftSectionId  String?
+  createdAt       DateTime      @default(now())
+  article         Article?      @relation(fields: [articleId], references: [id])
+  draftSection    DraftSection? @relation(fields: [draftSectionId], references: [id])
+  user            User?         @relation(fields: [userId], references: [id])
+}
+
+model BrainstormingSession {
+  id                     String        @id
+  title                  String
+  description            String?
+  userId                 String
+  selectedFilterArticles String[]      @default([])
+  lastSelectedNodeId     String?
+  lastSelectedEdgeId     String?
+  graphFilters           Json?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime
+  lastActivity           DateTime      @default(now())
+  coverColor             String        @default("#4c6ef5")
+  Article                Article[]
+  User                   User          @relation(fields: [userId], references: [id])
+  ChatMessage            ChatMessage[]
+}
+
+model ChatMessage {
+  id                   String               @id
+  sessionId            String
+  content              String
+  role                 String
+  createdAt            DateTime             @default(now())
+  contextEdgeIds       String[]             @default([])
+  contextNodeIds       String[]             @default([])
+  BrainstormingSession BrainstormingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+enum Role {
+  USER
+  ADMIN
 }
