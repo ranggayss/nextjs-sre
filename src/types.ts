@@ -20,5 +20,16 @@ export interface ExtendedEdge extends Edge {
     highlight?: string;
     hover?: string;
     opacity?: number;
-  }
+  };
+  fromTitle?: string;
+  toTitle?: string;
+  properties?: {
+    description?: string;
+    weight?: number;
+    explanation?: string;
+    similarity?: string;
+    keywords?: string;
+    type?: string;
+  };
+  displayDescription?: string;
 }

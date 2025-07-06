@@ -9,22 +9,22 @@ datasource db {
 }
 
 model Article {
-  id                   String                @id
-  title                String
-  filePath             String
-  createdAt            DateTime              @default(now())
-  updateAt             DateTime              @updatedAt
-  userId               String?
-  sessionId            String?
-  annotations          Annotation[]
-  BrainstormingSession BrainstormingSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user                 User?                 @relation(fields: [userId], references: [id])
-  edges                Edge[]
-  nodes                Node[]
+  id          String                @id @default(uuid())
+  title       String
+  filePath    String
+  createdAt   DateTime              @default(now())
+  updateAt    DateTime              @updatedAt
+  userId      String?
+  sessionId   String?
+  annotations Annotation[]
+  session     BrainstormingSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user        User?                 @relation(fields: [userId], references: [id])
+  edges       Edge[]
+  nodes       Node[]
 }
 
 model Node {
-  id             String  @id
+  id             String  @id @default(uuid())
   label          String
   title          String?
   att_goal       String?
@@ -42,7 +42,7 @@ model Node {
 }
 
 model Edge {
-  id        String  @id
+  id        String  @id @default(uuid())
   fromId    String
   toId      String
   relation  String?
@@ -68,7 +68,7 @@ model Analytics {
 }
 
 model User {
-  id                   String                 @id
+  id                   String                 @id @default(uuid())
   email                String                 @unique
   name                 String?
   password             String
@@ -79,12 +79,12 @@ model User {
   nim                  String?
   annotations          Annotation[]
   articles             Article[]
-  BrainstormingSession BrainstormingSession[]
+  brainstormingSession BrainstormingSession[]
   drafts               Draft[]
 }
 
 model Draft {
-  id        String         @id
+  id        String         @id @default(uuid())
   userId    String?
   title     String
   createdAt DateTime       @default(now())
@@ -93,7 +93,7 @@ model Draft {
 }
 
 model DraftSection {
-  id          String       @id
+  id          String       @id @default(uuid())
   draftId     String
   title       String
   content     String
@@ -102,7 +102,7 @@ model DraftSection {
 }
 
 model Annotation {
-  id              String        @id
+  id              String        @id @default(uuid())
   userId          String?
   articleId       String?
   page            Int
@@ -117,7 +117,7 @@ model Annotation {
 }
 
 model BrainstormingSession {
-  id                     String        @id
+  id                     String        @id @default(uuid())
   title                  String
   description            String?
   userId                 String
@@ -126,23 +126,23 @@ model BrainstormingSession {
   lastSelectedEdgeId     String?
   graphFilters           Json?
   createdAt              DateTime      @default(now())
-  updatedAt              DateTime
+  updatedAt              DateTime      @updatedAt
   lastActivity           DateTime      @default(now())
   coverColor             String        @default("#4c6ef5")
-  Article                Article[]
-  User                   User          @relation(fields: [userId], references: [id])
-  ChatMessage            ChatMessage[]
+  articles               Article[]
+  user                   User          @relation(fields: [userId], references: [id])
+  chatMessages           ChatMessage[]
 }
 
 model ChatMessage {
-  id                   String               @id
-  sessionId            String
-  content              String
-  role                 String
-  createdAt            DateTime             @default(now())
-  contextEdgeIds       String[]             @default([])
-  contextNodeIds       String[]             @default([])
-  BrainstormingSession BrainstormingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id             String               @id @default(uuid())
+  sessionId      String
+  content        String
+  role           String
+  createdAt      DateTime             @default(now())
+  contextEdgeIds String[]             @default([])
+  contextNodeIds String[]             @default([])
+  session        BrainstormingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 enum Role {

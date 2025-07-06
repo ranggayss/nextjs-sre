@@ -24,6 +24,7 @@ import {
   IconHome,
   IconChartDots2Filled,
   IconArticleFilled,
+  IconBrain,
 } from '@tabler/icons-react';
 
 const dashboard = [
@@ -35,13 +36,13 @@ const dashboard = [
   {
     icon: <IconChartDots2Filled/>,
     name: 'Knowledge Graph',
-    href: '/graph',
+    href: '/dashboard',
   },
-  {
-    icon: <IconArticleFilled/>,
-    name: 'Article',
-    href: '/article'
-  }
+  // {
+  //   icon: <IconArticleFilled/>,
+  //   name: 'Article',
+  //   href: '/article'
+  // }
 ];
 
 interface ChatHistoryItem {
@@ -49,21 +50,36 @@ interface ChatHistoryItem {
   title: string;
   timestamp: string;
   active: boolean;
+};
+
+interface BrainstormingSessionItem {
+  id: string,
+  title: string,
+  description?: string,
+  coverColor: string,
+  lastActivity: string,
+  active: boolean,
 }
 
 interface DashboardNavbarProps {
-  chatHistory: ChatHistoryItem[];
+  // chatHistory: ChatHistoryItem[];
+  brainstormingSessions: BrainstormingSessionItem[];
   mounted: boolean;
-  onChatSelect?: (chatId: number) => void;
-  onNewChat?: () => void;
+  onSessionSelect?: (sessionId: string) => void;
+  // onChatSelect?: (chatId: number) => void;
+  // onNewChat?: () => void;
+  onNewSession?: () => void;
   isCollapsed?: boolean;
 }
 
 export function DashboardNavbar({ 
-  chatHistory, 
+  // chatHistory,
+  brainstormingSessions, 
   mounted, 
-  onChatSelect, 
-  onNewChat,
+  // onChatSelect, 
+  onSessionSelect,
+  // onNewChat,
+  onNewSession,
   isCollapsed = false, 
 }: DashboardNavbarProps) {
   const theme = useMantineTheme();
@@ -119,8 +135,8 @@ export function DashboardNavbar({
         <Divider 
           label={
             <Group gap="xs">
-              <IconMessageCircle size={16} />
-              <Text size="sm" fw={600}>Tambah Chat</Text>
+              <IconBrain size={16} />
+              <Text size="sm" fw={600}>Tambah Brainstorming</Text>
             </Group>
           } 
           labelPosition="left" 
@@ -134,15 +150,15 @@ export function DashboardNavbar({
         size="md"
         radius="md"
         fullWidth
-        onClick={onNewChat}
+        onClick={onNewSession}
         style={{
           justifyContent: isCollapsed ? 'center' : 'flex-start',
           minHeight: rem(36),
           padding: isCollapsed ? rem(8) : undefined,
         }}
-        title={isCollapsed ? 'Tambah Obrolan Baru' : undefined}
+        title={isCollapsed ? 'Tambah Sesi Baru' : undefined}
       >
-        {isCollapsed ? <IconPlus size={18}/> : 'Tambah Obrolan Baru'}
+        {isCollapsed ? <IconPlus size={18}/> : 'Tambah Sesi Baru'}
       </Button>
       
       {!isCollapsed && (
@@ -150,7 +166,7 @@ export function DashboardNavbar({
           label={
             <Group gap="xs">
               <IconHistory size={16} />
-              <Text size="sm" fw={600}>Riwayat Chat</Text>
+              <Text size="sm" fw={600}>Sesi Brainstorming</Text>
             </Group>
           } 
           labelPosition="left" 
@@ -162,57 +178,66 @@ export function DashboardNavbar({
         overflow: 'hidden auto',
         minHeight: 0,
       }}>
-        {chatHistory.map((chat) => (
+        {brainstormingSessions.map((session) => (
           <Paper
-            key={chat.id}
+            key={session.id}
             p={isCollapsed ? "xs" : "sm"}
             radius="md"
             withBorder
             style={{
               cursor: 'pointer',
-              backgroundColor: chat.active 
+              backgroundColor: session.active 
                 ? (dark ? theme.colors.blue[9] : theme.colors.blue[0])
                 : undefined,
-              borderColor: chat.active 
+              borderColor: session.active 
                 ? theme.colors.blue[6] 
                 : undefined,
-              borderWidth: chat.active ? 2 : 1,
+              borderWidth: session.active ? 2 : 1,
               transition: 'all 0.2s ease',
               minHeight: rem(isCollapsed ? 40 : 60),
               display: 'flex',
               alignItems: 'center',
             }}
-            onClick={() => onChatSelect?.(chat.id)}
-            title={isCollapsed ? chat.title : undefined}
+            onClick={() => onSessionSelect?.(session.id)}
+            title={isCollapsed ? session.title : undefined}
           >
             {isCollapsed ? (
               <Group justify="center" style={{ width: '100%' }}>
                 <ActionIcon 
                   variant="subtle" 
-                  color={chat.active ? "blue" : "gray"} 
+                  color={session.active ? "blue" : "gray"} 
                   size="sm"
                 >
-                  <IconMessageCircle size={16} />
+                  <IconBrain size={16} />
                 </ActionIcon>
               </Group>              
             ) : (
               <Group justify="space-between" gap="xs">
+                <Box
+                  style={{
+                    width: 4,
+                    height: '100%',
+                    backgroundColor: session.coverColor,
+                    borderRadius: 2,
+                    minHeight: rem(40),
+                  }}
+                />
                 <Box style={{ flex: 1, minWidth: 0 }}>
                   <Text 
                     size="sm" 
                     fw={500} 
                     truncate
-                    c={chat.active ? 'blue' : undefined}
+                    c={session.active ? 'blue' : undefined}
                   >
-                    {chat.title}
+                    {session.title}
                   </Text>
                   <Text size="xs" c="dimmed">
-                    {chat.timestamp}
+                    {session.lastActivity}
                   </Text>
                 </Box>
-                <ActionIcon variant="subtle" color="gray" size="sm">
+                {/* <ActionIcon variant="subtle" color="gray" size="sm" onClick={(e) => e.stopPropagation()}>
                   <IconDots size={14} />
-                </ActionIcon>
+                </ActionIcon> */}
               </Group>
             )}
           </Paper>

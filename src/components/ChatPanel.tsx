@@ -24,6 +24,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 interface ChatPanelProps {
+  sessionId?: string;
   selectedNode: ExtendedNode | null;
   selectedEdge: ExtendedEdge | null;
 };
@@ -31,9 +32,11 @@ interface ChatPanelProps {
 type ChatMessage = {
   sender: 'user' | 'ai';
   text: string;
+  contextNodeIds?: string[];
+  contextEdgeIds?: string[];
 };
 
-export default function ChatPanel({ selectedNode, selectedEdge }: ChatPanelProps) {
+export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [contextNodes, setContextNodes] = useState<ExtendedNode[]>([]);
@@ -45,6 +48,28 @@ export default function ChatPanel({ selectedNode, selectedEdge }: ChatPanelProps
   const { colorScheme } = useMantineColorScheme();
   const theme = useMantineTheme();
   const isDark = colorScheme === 'dark';
+
+  useEffect(() => {
+    const fetchChatMessages = async () => {
+      try {        
+        const res = await fetch(`/api/chat?sessionId=${sessionId}`);
+        const data = await res.json();
+  
+        const formatted = data.map((msg: any) => ({
+          sender: msg.role === 'assistant' ? 'ai' : 'user',
+          text: msg.content,
+          contextNodeIds: msg.contextNodeIds || [],
+          contextEdgeIds: msg.contextEdgeIds || [],
+        }));
+  
+        setMessages(formatted);
+      } catch (error) {
+        console.error('Gagal memuat chat:', error);
+      }
+    };
+
+    fetchChatMessages();
+  }, [sessionId]);
 
   useEffect(() => {
   if (selectedNode) {
@@ -95,20 +120,29 @@ export default function ChatPanel({ selectedNode, selectedEdge }: ChatPanelProps
 
     if (contextNodes.length === 0){
       payloadd = {
-        mode: 'general',
+        sessionId,
         question: currentInput,
+        contextNodeIds: contextNodes.map((n) => n.id),
+        contextEdgeIds: contextEdges.map((e) => e.id),
+        mode: 'general',
       };
     } else if (contextNodes.length === 1){
       payloadd = {
+        sessionId,
+        question: currentInput,
+        contextNodeIds: contextNodes.map((n) => n.id),
+        contextEdgeIds: contextEdges.map((e) => e.id),
         mode: 'single node',
         nodeId: contextNodes[0].id,
-        question: currentInput,
       };
     } else{
       payloadd = {
+        sessionId,
+        question: currentInput,
+        contextNodeIds: contextNodes.map((n) => n.id),
+        contextEdgeIds: contextEdges.map((e) => e.id),
         mode: 'multiple node',
         nodeIds: contextNodes.map((n) => n.id), //[1, 2]
-        question: currentInput,
       }
     };
 

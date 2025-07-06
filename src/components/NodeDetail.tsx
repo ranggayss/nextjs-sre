@@ -3,7 +3,7 @@
 import { Modal, Table, Text, Group, Badge, Paper, ThemeIcon, Box, Stack } from '@mantine/core';
 import { ExtendedNode } from '../types';
 import { IconArticle, IconTarget, IconMath, IconHistory, IconArrowForward, IconFileAlert } from '@tabler/icons-react';
-import WebViewer from '@/components/PDFViewer';
+import WebViewer from '@/components/WebViewer';
 import { useState } from 'react';
 
 interface NodeDetailProps {
@@ -180,56 +180,38 @@ export default function NodeDetail({ node, onClose }: NodeDetailProps) {
         )}
 
         <Modal
-                opened={opened}
-                onClose={() => {
-                    setOpened(false); 
-                    setSelectedPDF(null)
-                }}
-                title="Lihat Artikel"
-                size="90%"
-                padding='sm'
-                centered
-                overlayProps={{ blur: 3, style: {
-                    padding: '1.5rem'
-                }}}
-                styles={{
-                    content: {
-                        height: '90vh',
-                        maxHeight: '90vh',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        padding: 0,
-                    },
-                    body: {
-                        // height: 'calc(100% - 60px)',
-                        // overflow: 'hidden',
-                        flex: 1,
-                        padding: 0,
-                        display: 'flex',
-                        overflow: 'auto',
-                        flexDirection: 'column',
-                    },
-                    header: {
-                        padding: '1rem',
-                        position: 'sticky',
-                        top: 0,
-                        zIndex: 10,
-                        // backgroundColor: theme.colors.gray[0],
-                    }
-                }}>
-                        {selectedPDF && (
-                            <WebViewer
-                                key={selectedPDF}
-                                fileUrl={selectedPDF}
-                                path="/lib/webviewer"
-                                initialDoc={selectedPDF}
-                                licenseKey={process.env.LICENSE_KEY_PDF}
-                                onAnalytics={handleAnalytics}
-                                >
-        
-                                </WebViewer>
-                        )}
-                </Modal>
+            opened={opened}
+            onClose={() => {
+                setOpened(false);
+                setSelectedPDF(null);
+            }}
+            title="Lihat Artikel"
+            size="90%"
+            padding="sm"
+            centered
+            overlayProps={{ blur: 3 }}
+            styles={{
+                content: {
+                height: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+                padding: 0,
+                position: 'relative',
+                },
+                body: {
+                flex: 1,
+                overflow: 'hidden',
+                padding: 0,
+                position: 'relative',
+                },
+            }}
+            >
+            {selectedPDF && (
+                <div style={{ height: '100%', position: 'relative' }}>
+                <WebViewer fileUrl={selectedPDF} onAnalytics={handleAnalytics} />
+                </div>
+            )}
+        </Modal>
       </Stack>
     </Stack>
   );

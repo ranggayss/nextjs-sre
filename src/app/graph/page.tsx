@@ -1,4 +1,4 @@
-// src/app/page.tsx
+// src/app/graph/page.tsx
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
@@ -164,12 +164,6 @@ export default function Home() {
       relationMapping[relation as keyof typeof relationMapping]
     ).filter(Boolean); // Remove undefined values
     
-    /*
-    console.log("Active Relations (display):", activeRelations);
-    console.log("Mapped Relations (API):", mappedActiveRelations);
-    console.log("Available Edge Relations:", [...new Set(edges.map(e => e.relation))]);
-    */
-
     return edges.filter((edge) => {
       const matchRelation = activeRelations.length > 0 && mappedActiveRelations.includes(edge.relation || '');
       const matchNodes = nodeIds.has(edge.from) && nodeIds.has(edge.to);
@@ -198,11 +192,6 @@ export default function Home() {
           const nodesData = await nodesRes.json();
           const edgesData = await edgesRes.json();
 
-          /*
-          console.log("Raw Nodes Data",nodesData);
-          console.log("Raw Edges Data",edgesData);
-          */
-
           const mappedNodes = nodesData.map((node: any) =>({
             ...node,
             label: node.title,
@@ -221,12 +210,6 @@ export default function Home() {
             font: { color: 'black', background: 'white' },
           }));
 
-          /*
-          console.log("Mapped Edges:" ,mappedEdges);
-          console.log("Edge Relations Found:" ,[...new Set(mappedEdges.map((e: any) => e.relation))]);
-          console.log("Expected Relations:" ,Object.values(relationMapping));
-          */
-         
           setEdges(mappedEdges);
     } catch (error) {
       console.error("Error Fetching Data:", error);
@@ -236,44 +219,6 @@ export default function Home() {
   useEffect(() => {
     fetchData();
   }, []);
-
-
-/*
-  useEffect(() => {
-    console.log("=== COMPREHENSIVE DEBUG INFO ===");
-    console.log("1. State Values:");
-    console.log("   - Active Articles:", activeArticles);
-    console.log("   - Active Relations (UI):", activeRelations);
-    
-    console.log("2. Mapping Info:");
-    console.log("   - Relation Mapping:", relationMapping);
-    console.log("   - Mapped Active Relations:", activeRelations.map(r => relationMapping[r as keyof typeof relationMapping]));
-    
-    console.log("3. Data Info:");
-    console.log("   - Total Nodes:", nodes.length);
-    console.log("   - Total Edges:", edges.length);
-    console.log("   - Available Edge Relations:", [...new Set(edges.map(e => e.relation))]);
-    console.log("   - Expected Relations:", Object.values(relationMapping));
-    
-    console.log("4. Filtered Results:");
-    console.log("   - Filtered Nodes Count:", filteredNodes.length);
-    console.log("   - Filtered Edges Count:", filteredEdges.length);
-    console.log("   - Node IDs in Filter:", filteredNodes.map(n => n.id));
-    console.log("   - Edge Details:", filteredEdges.map(e => ({
-      from: e.from,
-      to: e.to,
-      relation: e.relation,
-      label: e.label
-    })));
-    
-    if (filteredEdges.length === 0 && edges.length > 0) {
-      console.warn("🚨 No edges showing! Possible issues:");
-      console.warn("   - Check if node IDs match edge from/to values");
-      console.warn("   - Check if relation mapping is correct");
-      console.warn("   - Check if activeRelations contains valid values");
-    }
-  }, [activeArticles, activeRelations, filteredNodes, filteredEdges, edges, nodes]);
-*/
 
   const handleNodeClick = useCallback((node: ExtendedNode) => {
     setSelectedEdge(null);
@@ -300,9 +245,9 @@ export default function Home() {
         sidebarOpened={false}
         onToggleSidebar={() => {}}
         mounted={false}
-        chatHistory={chatHistory}
-        onChatSelect={handleChatSelect}
-        onNewChat={handleNewChat}
+        // chatHistory={chatHistory}
+        // onChatSelect={handleChatSelect}
+        // onNewChat={handleNewChat}
       >
         <Container fluid h="100%" p="xl">
           <Text>Loading...</Text>
@@ -316,9 +261,9 @@ export default function Home() {
       sidebarOpened={sidebarOpened}
       onToggleSidebar={handleToggleSidebar}
       mounted={mounted}
-      chatHistory={chatHistory}
-      onChatSelect={handleChatSelect}
-      onNewChat={handleNewChat}
+      // chatHistory={chatHistory}
+      // onChatSelect={handleChatSelect}
+      // onNewChat={handleNewChat}
     >
       <Container fluid h="100%" p="xl">
         <Grid gutter="xl" h="100%">
@@ -380,6 +325,7 @@ export default function Home() {
                       <Checkbox
                         key={relation}
                         value={relation}
+                        color={color}
                         label={
                           <Group gap="xs">
                             <Badge variant="dot" color={color} size="sm">

@@ -8,19 +8,19 @@ import { IconArrowDown, IconNetwork, IconArticle, IconEye  } from '@tabler/icons
 interface EdgeDetailProps {
   edge: ExtendedEdge | null;
   onClose: () => void;
-  onOpenNodeDetail?:(nodeId:number) => void;
+  onOpenNodeDetail?:(nodeId:string) => void;
 };
 
 interface PopulatedEdge {
-  id: number;
+  id: string;
   label: string | null;
   relation: string | null;
   from: {
-    id: number;
+    id: string;
     title: string;
   };
   to: {
-    id: number;
+    id: string;
     title: string;
   };
 };
@@ -74,6 +74,19 @@ export default function EdgeDetail({ edge, onClose, onOpenNodeDetail }: EdgeDeta
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (!edge) return;
+
+    if (edge.fromTitle && edge.toTitle) {
+      setEdgeNode({
+        id: edge.id?.toString() ?? '',
+        relation: edge.relation || null,
+        from: { id: edge.from?.toString() ?? '', title: edge.fromTitle},
+        to: { id: edge.to?.toString() ?? '', title: edge.toTitle},
+        label: edge.label || ''
+      });
+      return;
+    }
+
     if (edge?.id){
       setLoading(true);
       fetch(`/api/edges/${edge?.id}`)
@@ -199,7 +212,7 @@ return (
             Deskripsi Hubungan:
           </Text>
           <Text size="sm" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-            {edge.label}
+            {edge.label || edge.displayDescription }
           </Text>
         </Paper>
       )}

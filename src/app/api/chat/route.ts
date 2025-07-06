@@ -5,7 +5,7 @@ import { chatAI } from '@/utils/chatAI';
 export async function POST(req: NextRequest, res: NextResponse){
 
     const body = await req.json();
-    const { mode, nodeId, nodeIds, question} = body;
+    const { sessionId, mode, nodeId, nodeIds, question, contextNodeIds, contextEdgeIds } = body;
 
     let thereIsNode: boolean = false; 
 
@@ -79,9 +79,48 @@ export async function POST(req: NextRequest, res: NextResponse){
         })
         });
         answer = await ragAnswer.json();
-        return NextResponse.json({answer: answer.answer || 'Tidak ada jawaban yang ditemukan.'});  
+        const finalAnswer = answer.answer;
+
+        await prisma.chatMessage.create({
+            data: {
+                sessionId,
+                role: 'user',
+                content: question,
+                contextNodeIds: contextNodeIds,
+                contextEdgeIds: contextEdgeIds,
+            }
+        });
+
+        await prisma.chatMessage.create({
+            data: {
+                sessionId,
+                role: 'assistant',
+                content: finalAnswer,
+                contextNodeIds: contextNodeIds,
+                contextEdgeIds: contextEdgeIds,
+            }
+        });
+
+        return NextResponse.json({answer: finalAnswer || 'Tidak ada jawaban yang ditemukan.'});  
     } else {
         answer = await chatAI(promptGeneral);
+
+        await prisma.chatMessage.create({
+            data: {
+                sessionId,
+                role: 'user',
+                content: question,
+            }
+        });
+
+        await prisma.chatMessage.create({
+            data: {
+                sessionId,
+                role: 'assistant',
+                content: answer,
+            }
+        });
+
         return NextResponse.json({answer});
     }
 
@@ -90,3 +129,19 @@ export async function POST(req: NextRequest, res: NextResponse){
     // const answer: any = await chatAI(prompt);
     // return NextResponse.json({answer: answer.answer || 'Tidak ada jawaban yang ditemukan.'});  
 };
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const sessionId = searchParams.get('sessionId');
+
+  if (!sessionId) {
+    return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
+  }
+
+  const messages = await prisma.chatMessage.findMany({
+    where: { sessionId },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return NextResponse.json(messages);
+}

@@ -5,7 +5,7 @@ const client = new GoogleGenAI({
 });
 
 export interface ExtendedNode {
-  id?: number;
+  id?: string;
   label: string;
   type: string;
   title?: string | null;

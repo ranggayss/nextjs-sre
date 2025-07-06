@@ -9,9 +9,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     console.log('Received ID:', idParam);
 
     // Convert string to number
-    const id = Number(idParam);
+    // const id = String(idParam);
 
     // Check if conversion resulted in a valid number
+    /*
     if (isNaN(id)) {
       console.log('ID conversion failed - not a valid number:', idParam);
       return NextResponse.json({ 
@@ -20,11 +21,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         note: 'Database expects integer ID but received non-numeric value'
       }, { status: 400 });
     }
+    */
 
-    console.log('Converted ID to number:', id);
+    // console.log('Converted ID to number:', id);
+
+    if (idParam.includes('-')){
+      const [fromId, toId, type] = idParam.split('-');
+      const edge = await prisma.edge.findFirst({
+        where: {
+          fromId,
+          toId,
+        },
+        include: {
+          from: true,
+          to: true,
+        }
+      });
+
+      if (edge) return NextResponse.json(edge);
+    }
 
     const edge = await prisma.edge.findUnique({
-      where: { id },
+      where: { id: idParam },
       include: {
         from: true,
         to: true,
@@ -32,7 +50,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     if (!edge) {
-      console.log('Edge not found with ID:', id);
+      console.log('Edge not found with ID:', idParam);
       return NextResponse.json({ error: 'edge not found' }, { status: 404 });
     }
 

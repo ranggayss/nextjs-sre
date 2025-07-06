@@ -56,6 +56,50 @@ export const POST = async (req: NextRequest) => {
     console.log("Raw AI response:", textOutput);
     console.log("Extracted JSON:", json);
 
+    const validEdges = [];
+    for (const edge of edges){
+      const fromNode = nodes.find(n => n.id === edge.from);
+      const toNode = nodes.find(n => n.id === edge.to);
+
+      if (!fromNode) {
+        console.warn(`❌ From node ${edge.from} not found, skipping edge`);
+        continue;
+      }
+      
+      if (!toNode) {
+        console.warn(`❌ To node ${edge.to} not found, skipping edge`);
+        continue;
+      }
+
+      const edgeArticleId = fromNode.articleId;
+
+      validEdges.push({
+        fromId: edge.from,
+        toId: edge.to,
+        relation: edge.relation || null,
+        label: edge.label || null,
+        color: getColorFromRelation(edge.relation),
+        articleId: edgeArticleId, // FIXED: Use articleId from the node
+      });  
+    }
+
+    if (validEdges.length === 0) {
+    return NextResponse.json({ 
+      success: true, 
+      nodes, 
+      edges: [],
+      message: "No valid edges to create" 
+    });
+    }
+
+    const createdEdges = await prisma.edge.createMany({
+      data: validEdges,
+      skipDuplicates: true,
+    });
+
+    console.log("💾 Created edges:", createdEdges.count);
+
+    /*
     // Simpan edges ke DB
     await prisma.edge.createMany({
       data: edges.map((edge: any) => ({
@@ -71,6 +115,7 @@ export const POST = async (req: NextRequest) => {
       })),
       skipDuplicates: true,
     });
+    */
 
     return NextResponse.json({ success: true, nodes, edges });
   } catch (error) {

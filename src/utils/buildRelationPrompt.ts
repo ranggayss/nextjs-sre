@@ -1,5 +1,5 @@
 interface Node {
-  id: number;
+  id: string;
   label: string;
   title: string | null;
   att_goal: string | null;
@@ -56,7 +56,7 @@ export function buildRelationPrompt(nodes: Node[]): string {
  prompt += `Contoh label yang baik:\n`;
  prompt += `- "Artikel 'Analisis Usability Aplikasi XYZ' menggunakan metode yang disederhanakan dari artikel 'Studi SEM-PLS pada Aplikasi XYZ'"\n\n`;
   // Debug (optional)
-  console.log("🧠 Prompt dikirim ke AI:\n", prompt);
+  // console.log("🧠 Prompt dikirim ke AI:\n", prompt);
 
   return prompt;
 }

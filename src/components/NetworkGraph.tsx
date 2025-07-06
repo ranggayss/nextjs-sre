@@ -112,7 +112,7 @@ export default function NetworkGraph({
         },
         interaction: { 
           hover: true, 
-          navigationButtons: true,
+          navigationButtons: false,
           dragNodes: true,
           dragView: true,
           zoomView: true,

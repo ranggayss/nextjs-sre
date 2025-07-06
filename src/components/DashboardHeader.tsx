@@ -23,11 +23,19 @@ import {
   IconUser,
   IconLogout,
 } from '@tabler/icons-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 interface DashboardHeaderProps {
   sidebarOpened: boolean;
   onToggleSidebar: () => void;
   mounted: boolean;
+}
+
+interface User {
+  id: string,
+  email: string,
+  name: string,
 }
 
 export function DashboardHeader({ 
@@ -37,6 +45,57 @@ export function DashboardHeader({
 }: DashboardHeaderProps) {
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const dark = mounted ? colorScheme === 'dark' : false;
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  
+  const fetchUser = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/signin', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+      });
+
+      const data = await res.json();
+
+      if (!data){
+        setUser(null);
+        throw new Error('There is no user authenticated');
+      }else{
+        console.log(data);
+        setUser(data.user);
+      }
+    } catch (error: any) {
+        console.error(error.message); 
+        setUser(null);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUser();
+  }, []);
+
+  const handleLogout = async () => {
+    const res = await fetch('/api/auth/signout',{
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (res.ok){
+      console.log('Berhasil logout');
+      router.push('signin');
+    }else{
+      console.error('Tidak berhasil logout');
+    }
+  };
 
   if (!mounted) {
     return (
@@ -150,14 +209,14 @@ export function DashboardHeader({
                 </Group>
               </Menu.Label>
               <Menu.Item>
-                <Text size="sm" fw={600}>Researcher User</Text>
-                <Text size="xs" c="dimmed">researcher@example.com</Text>
+                <Text size="sm" fw={600}>{(user?.name)?.split('@')[0]}</Text>
+                <Text size="xs" c="dimmed">{user?.email}</Text>
               </Menu.Item>
               <Menu.Divider />
               <Menu.Item 
                 leftSection={<IconLogout size={16} />}
                 color="red" 
-                onClick={() => console.log('Logout clicked')}
+                onClick={handleLogout}
               >
                 Sign out
               </Menu.Item>

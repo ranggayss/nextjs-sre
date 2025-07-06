@@ -7,27 +7,27 @@ import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import Link from "next/link";
 import { useCallback, useEffect, useState, useRef } from "react"
-import WebViewer from "@/components/PDFViewer";
+import WebViewer from "@/components/WebViewer";
 import { handleAnalytics } from "@/components/NodeDetail";
 import Loading from "../Loading";
 
 interface Article {
-    id: number,
+    id: string,
     title: string,
     att_background: string,
     att_url: string,
 };
 
 interface Annotation {
-    id: number,
-    articleId: number,
+    id: string,
+    articleId: string,
     page: number,
     highlightedText: string,
     comment: string,
     semanticTag?: string,
     createdAt: string,
     article: {
-        id: number,
+        id: string,
         title: string,
     },
 };
@@ -42,7 +42,7 @@ export default function Article(){
     const [article, setArticle] = useState<Article[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [uploading, setUploading] = useState(false);
-    const [deletingArticleId, setDeletingArticleId] = useState<number | null>(null);
+    const [deletingArticleId, setDeletingArticleId] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [opened, setOpened] = useState(false);
@@ -117,7 +117,7 @@ export default function Article(){
 
     console.log('artikel :', article);
 
-    const handleDeleteArticle = async (id: number, title: string) => {
+    const handleDeleteArticle = async (id: string, title: string) => {
         modals.openConfirmModal({
             title: (
                 <Text size="lg" fw={600} c="red">
@@ -163,7 +163,7 @@ export default function Article(){
         });
     };
 
-    const performDeleteArticle = async (id: number, title: string) => {
+    const performDeleteArticle = async (id: string, title: string) => {
         setDeletingArticleId(id);
 
         try {
@@ -287,7 +287,7 @@ export default function Article(){
     );
 
 
-        const handleDeleteAnnotations = async (id: number, highlightedText: string) => {
+        const handleDeleteAnnotations = async (id: string, highlightedText: string) => {
         modals.openConfirmModal({
             title: (
                 <Text size="lg" fw={600} c="red">
@@ -334,7 +334,7 @@ export default function Article(){
     };
 
 
-    const performDeleteAnnotations = async (id: number) => {
+    const performDeleteAnnotations = async (id: string) => {
         try {            
             setLoadingDeleteAnnotations(true);
             const res = await fetch(`/api/annotation/${id}`, {
@@ -354,6 +354,9 @@ export default function Article(){
             } else {
                 throw new Error('gagal delete annotation');
             }
+
+            await getAnnotations();
+            
         } catch (error: any) {
             console.error('Gagal fetch delete annotation :', error?.message );
             notifications.show({
@@ -372,9 +375,9 @@ export default function Article(){
         sidebarOpened={sidebarOpened}
         onToggleSidebar={handleToogleSidebar}
         mounted={mounted}
-        chatHistory={chatHistory}
-        onChatSelect={handleChatSelect}
-        onNewChat={handleNewChat}
+        // chatHistory={chatHistory}
+        // onChatSelect={handleChatSelect}
+        // onNewChat={handleNewChat}
     >
         <Container h='100%' p='xl' style={{
             display: 'flex',
@@ -502,54 +505,37 @@ export default function Article(){
         <Modal
             opened={opened}
             onClose={() => {
-                setOpened(false); 
-                setSelectedPDF(null)
+                setOpened(false);
+                setSelectedPDF(null);
             }}
             title="Lihat Artikel"
             size="90%"
-            padding='sm'
+            padding="sm"
             centered
-            overlayProps={{ blur: 3, style: {
-                padding: '1.5rem'
-            }}}
+            overlayProps={{ blur: 3 }}
             styles={{
                 content: {
-                    height: '90vh',
-                    maxHeight: '90vh',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    padding: 0,
+                height: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+                padding: 0,
+                position: 'relative', 
                 },
                 body: {
-                    // height: 'calc(100% - 60px)',
-                    // overflow: 'hidden',
-                    flex: 1,
-                    padding: 0,
-                    display: 'flex',
-                    overflow: 'auto',
-                    flexDirection: 'column',
+                flex: 1,
+                overflow: 'hidden',
+                padding: 0,
+                position: 'relative', 
                 },
-                header: {
-                    padding: '1rem',
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 10,
-                    // backgroundColor: theme.colors.gray[0],
-                }
-        }}>
-                {selectedPDF && (
-                    <WebViewer
-                        key={selectedPDF}
-                        fileUrl={selectedPDF}
-                        path="/lib/webviewer"
-                        initialDoc={selectedPDF}
-                        licenseKey={process.env.LICENSE_KEY_PDF}
-                        onAnalytics={handleAnalytics}
-                        >
-
-                        </WebViewer>
-                )}
+            }}
+            >
+            {selectedPDF && (
+                <div style={{ height: '100%', position: 'relative' }}>
+                <WebViewer fileUrl={selectedPDF} onAnalytics={handleAnalytics} />
+                </div>
+            )}
         </Modal>
+
         <Modal
             opened={showHistory}
             onClose={() => setShowHistory(false)}

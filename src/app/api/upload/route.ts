@@ -8,6 +8,7 @@ import { readPDFContent } from "@/utils/pdfReader";
 import { analyzeWithAI, ExtendedNode } from "@/utils/analyzeWithAI";
 import { Readable } from "stream";
 import { supabase } from "@/lib/supabase";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const busboy = Busboy({ headers: Object.fromEntries(req.headers) });
     let title = "Untitled";
+    let sessionId = "";
     let fileBuffer: Buffer;
     let uploadFileName = "";
     let originalFileName = "";
@@ -67,10 +69,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     busboy.on("field", (fieldname, val) => {
       if (fieldname === "title") {
         title = val;
+      } if (fieldname === "sessionId") {
+        sessionId = val;
       }
     });
 
     busboy.on("finish", async () => {
+      const supabase = await createServerSupabaseClient();
+      const { data: {user}, error } = await supabase.auth.getUser();
+
+      if (!user || error) {
+        return resolve(NextResponse.json({error: 'Unauthorized'}, {status: 401}));
+      }
+
+      const userId = user.id;
+
       try {
         if (title === "Untitled" && originalFileName){
           title = originalFileName;
@@ -121,7 +134,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           data: {
             title,
             filePath: publicUrl,
-            createdAt: new Date(),
+            userId: userId,
+            sessionId: sessionId || null,
+            // createdAt: new Date(),
           },
         });
         
@@ -142,6 +157,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           },
         });
 
+        /*
         await fetch("http://localhost:8000/ingest", {
           method: "POST",
           headers: {
@@ -151,6 +167,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             pdf_url: `${process.env.BASE_URL}${publicUrl}`
           })
         });
+        */
 
         // Panggil API generate edges (external route)
         const edgeRes = await fetch(`${process.env.BASE_URL}/api/generate-edges`, {
@@ -161,6 +178,37 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
         if (!edgeRes.ok) throw new Error("Failed to generate edges");
         const edgeData = await edgeRes.json();
+
+        await fetch(`${process.env.BASE_URL}/api/neo4j/sync-node`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sessionId: sessionId,
+            articleId: article.id,
+            nodeData: {
+              id: node.id,
+              title: node.title,
+              att_background: node.att_background,
+              att_method: node.att_method,
+              att_goal: node.att_goal,
+              att_future: node.att_future,
+              att_gaps: node.att_gaps,
+              att_url: node.att_url,
+            },
+          }),
+        });
+        
+
+        
+        await fetch(`${process.env.BASE_URL}/api/neo4j/sync-edges`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            sessionId,
+          })
+        });
 
         resolve(
           NextResponse.json({
