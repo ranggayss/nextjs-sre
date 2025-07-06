@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { chatAI } from '@/utils/chatAI';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 export async function POST(req: NextRequest, res: NextResponse){
 
     const body = await req.json();
-    const { sessionId, mode, nodeId, nodeIds, question, contextNodeIds, contextEdgeIds } = body;
+    const { sessionId, mode, nodeId, nodeIds, question, contextNodeIds, contextEdgeIds, forceWeb } = body;
+
+    console.log("perceived:", sessionId);
 
     let thereIsNode: boolean = false; 
 
@@ -69,25 +72,101 @@ export async function POST(req: NextRequest, res: NextResponse){
 
     let answer: any;
     if(thereIsNode){
-        const ragAnswer = await fetch("http://localhost:8000/rag", {
-        method: "POST",
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            question: prompt,
-        })
-        });
-        answer = await ragAnswer.json();
-        const finalAnswer = answer.answer;
+
+        try {
+            const ragAnswer = await fetch(`${process.env.PY_URL}/api/chat`, {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                question: prompt,
+                session_id: sessionId,
+                mode: mode === 'single node' ? 'single_node' : 'multi_nodes',
+                node_id: nodeId,
+                node_ids: nodeIds,
+                context_node_ids: contextNodeIds,
+                context_edge_ids: contextEdgeIds,
+                force_web: false
+            }),
+            signal: AbortSignal.timeout(30000)
+            });
+
+            if (!ragAnswer.ok) {
+                throw new Error(`Python API error: ${ragAnswer.status} ${ragAnswer.statusText}`);
+            }
+
+            const ragData = await ragAnswer.json();
+
+            console.log(ragData);
+
+            const finalAnswer = ragData.answer || ragData.response || 'Tidak ada jawaban yang ditemukan';
+
+            await prisma.chatMessage.create({
+                data: {
+                    sessionId,
+                    role: 'user',
+                    content: question,
+                    contextNodeIds: contextNodeIds,
+                    contextEdgeIds: contextEdgeIds,
+                    references: []
+                }
+            });
+
+            await prisma.chatMessage.create({
+                data: {
+                    sessionId,
+                    role: 'assistant',
+                    content: finalAnswer,
+                    contextNodeIds: contextNodeIds,
+                    contextEdgeIds: contextEdgeIds,
+                    references: ragData.references || [],
+                }
+            });
+
+            return NextResponse.json({...ragData,answer: finalAnswer || 'Tidak ada jawaban yang ditemukan.'});
+        } catch (error) {
+            console.error('Error calling Python API:', error);
+            return NextResponse.json({ error: 'Failed to get response from AI service'}, {status: 502});
+        }
+
+  
+    } else {
+        if (forceWeb) {
+            try {
+                const ragAnswer = await fetch(`${process.env.PY_URL}/api/chat`, {
+                    method: "POST",
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question: promptGeneral,
+                        session_id: sessionId,
+                        force_web: true
+                    }),
+                    signal: AbortSignal.timeout(30000)
+                });
+
+                if (!ragAnswer.ok) {
+                    throw new Error(`Python API error: ${ragAnswer.status} ${ragAnswer.statusText}`);
+                }
+
+                const ragData = await ragAnswer.json();
+                answer = ragData.answer || ragData.response || 'Tidak ada jawaban yang ditemukan';
+            } catch (error) {
+                console.error('Error calling Python API for web search:', error);
+                // Fallback to regular chatAI if web search fails
+                answer = await chatAI(promptGeneral);
+            }
+        } else {
+            answer = await chatAI(promptGeneral);
+        }
 
         await prisma.chatMessage.create({
             data: {
                 sessionId,
                 role: 'user',
                 content: question,
-                contextNodeIds: contextNodeIds,
-                contextEdgeIds: contextEdgeIds,
+                contextNodeIds: forceWeb ? null : contextNodeIds,
+                contextEdgeIds: forceWeb ? null : contextEdgeIds
             }
         });
 
@@ -95,14 +174,17 @@ export async function POST(req: NextRequest, res: NextResponse){
             data: {
                 sessionId,
                 role: 'assistant',
-                content: finalAnswer,
-                contextNodeIds: contextNodeIds,
-                contextEdgeIds: contextEdgeIds,
+                content: answer,
+                contextNodeIds: forceWeb ? null : contextNodeIds,
+                contextEdgeIds: forceWeb ? null : contextEdgeIds
             }
         });
 
-        return NextResponse.json({answer: finalAnswer || 'Tidak ada jawaban yang ditemukan.'});  
-    } else {
+        return NextResponse.json({ answer });
+    }
+    
+    /*
+    else {
         answer = await chatAI(promptGeneral);
 
         await prisma.chatMessage.create({
@@ -123,6 +205,7 @@ export async function POST(req: NextRequest, res: NextResponse){
 
         return NextResponse.json({answer});
     }
+    */
 
 
     // const answer = thereIsNode ? await ragAnswer.json() : await chatAI(promptGeneral);
@@ -131,17 +214,46 @@ export async function POST(req: NextRequest, res: NextResponse){
 };
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const sessionId = searchParams.get('sessionId');
 
-  if (!sessionId) {
-    return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
-  }
+    try {
+        const supabase = await createServerSupabaseClient();
+        const { data: {user}, error} = await supabase.auth.getUser();
 
-  const messages = await prisma.chatMessage.findMany({
-    where: { sessionId },
-    orderBy: { createdAt: 'asc' },
-  });
+        if (!user || error) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
-  return NextResponse.json(messages);
+        const { searchParams } = new URL(req.url);
+        const sessionId = searchParams.get('sessionId');
+
+        if (!sessionId) {
+            return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
+        }
+
+        // Ambil chat history dari database
+        const session = await prisma.brainstormingSession.findUnique({
+        where: {
+            id: sessionId,
+            userId: user.id
+        }
+        });
+
+         if (!session) {
+      return NextResponse.json({ error: 'Session not found or access denied' }, { status: 404 });
+    }
+
+        const chatHistory = await prisma.chatMessage.findMany({
+            where: {
+                sessionId: sessionId,
+            },
+            orderBy: {
+                createdAt: 'asc'
+            }
+        })
+
+        return NextResponse.json(chatHistory);
+    } catch (error) {
+        console.error('Error fetching chat history:', error);
+        return NextResponse.json({ error: 'Internal Server Error'}, {status: 500});   
+    }
 }
