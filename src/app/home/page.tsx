@@ -179,9 +179,9 @@ export default function Home() {
         sidebarOpened={false}
         onToggleSidebar={() => {}}
         mounted={false}
-        chatHistory={chatHistory}
-        onChatSelect={handleChatSelect}
-        onNewChat={handleNewChat}
+        // chatHistory={chatHistory}
+        // onChatSelect={handleChatSelect}
+        // onNewChat={handleNewChat}
       >
         <Container fluid h="100%" p="xl">
           <Text>Loading...</Text>
@@ -195,9 +195,9 @@ export default function Home() {
       sidebarOpened={sidebarOpened}
       onToggleSidebar={handleToggleSidebar}
       mounted={mounted}
-      chatHistory={chatHistory}
-      onChatSelect={handleChatSelect}
-      onNewChat={handleNewChat}
+      // chatHistory={chatHistory}
+      // onChatSelect={handleChatSelect}
+      // onNewChat={handleNewChat}
     >
       <Container fluid h="100%" p="xl">
         {/*  this resizable container */}
