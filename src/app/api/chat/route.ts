@@ -74,23 +74,49 @@ export async function POST(req: NextRequest, res: NextResponse){
     if(thereIsNode){
 
         try {
-            const ragAnswer = await fetch(`${process.env.PY_URL}/api/chat`, {
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                question: prompt,
-                session_id: sessionId,
-                mode: mode === 'single node' ? 'single_node' : 'multi_nodes',
-                node_id: nodeId,
-                node_ids: nodeIds,
-                context_node_ids: contextNodeIds,
-                context_edge_ids: contextEdgeIds,
-                force_web: false
-            }),
-            signal: AbortSignal.timeout(30000)
-            });
+            //this for main.py(fastapi)
+            
+            // const ragAnswer = await fetch(`${process.env.PY_URL}/api/chat`, {
+            // method: "POST",
+            // headers: {
+            //     'Content-Type': 'application/json',
+            // },
+            // body: JSON.stringify({
+            //     question: prompt,
+            //     session_id: sessionId,
+            //     mode: mode === 'single node' ? 'single_node' : 'multi_nodes',
+            //     node_id: nodeId,
+            //     node_ids: nodeIds,
+            //     context_node_ids: contextNodeIds,
+            //     context_edge_ids: contextEdgeIds,
+            //     force_web: false
+            // }),
+            // signal: AbortSignal.timeout(30000)
+            // });
+
+            const ragAnswer = await fetch(`${process.env.PY_URL}/mcp`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "tools/call",
+                    params: {
+                    name: "pral_chat",
+                    arguments: {
+                        question: prompt, // atau promptGeneral
+                        session_id: sessionId,
+                        mode: mode === 'single node' ? 'single_node' : (mode === 'multiple node' ? 'multi_nodes' : 'general'),
+                        node_id: nodeId,
+                        node_ids: nodeIds,
+                        context_node_ids: contextNodeIds,
+                        context_edge_ids: contextEdgeIds,
+                        force_web: forceWeb
+                    }
+                    },
+                    id: 1
+                }),
+                signal: AbortSignal.timeout(30000)
+                });
 
             if (!ragAnswer.ok) {
                 throw new Error(`Python API error: ${ragAnswer.status} ${ragAnswer.statusText}`);
@@ -100,7 +126,28 @@ export async function POST(req: NextRequest, res: NextResponse){
 
             console.log(ragData);
 
-            const finalAnswer = ragData.answer || ragData.response || 'Tidak ada jawaban yang ditemukan';
+            //this for python fastapi (main.py)
+            
+            // const finalAnswer = ragData.answer || ragData.response || 'Tidak ada jawaban yang ditemukan';
+
+            let answerText = ragData.result?.content?.[0]?.text || 'Tidak ada jawaban';
+
+            // Jika answerText berupa JSON string, parse dulu untuk ambil references
+
+            let parsedAnswer: any = answerText;
+            let references: any[] = [];
+            try {
+            parsedAnswer = JSON.parse(answerText);
+            // Jika hasil parsing punya references, ambil
+            if (parsedAnswer && parsedAnswer.references) {
+                references = parsedAnswer.references;
+                // Jika ingin, bisa juga ambil jawaban utama dari parsedAnswer.response atau parsedAnswer.answer
+                answerText = parsedAnswer.response || parsedAnswer.answer || answerText;
+            }
+            } catch (e) {
+                // answerText memang plain text, references tetap []
+                console.warn("Answer text is not JSON, treating as plain text.");
+            }
 
             await prisma.chatMessage.create({
                 data: {
@@ -113,18 +160,35 @@ export async function POST(req: NextRequest, res: NextResponse){
                 }
             });
 
+            //for mcp
             await prisma.chatMessage.create({
                 data: {
                     sessionId,
                     role: 'assistant',
-                    content: finalAnswer,
+                    content: answerText,
                     contextNodeIds: contextNodeIds,
                     contextEdgeIds: contextEdgeIds,
-                    references: ragData.references || [],
+                    references: references || [],
                 }
             });
 
-            return NextResponse.json({...ragData,answer: finalAnswer || 'Tidak ada jawaban yang ditemukan.'});
+            //for usual
+            // await prisma.chatMessage.create({
+            //     data: {
+            //         sessionId,
+            //         role: 'assistant',
+            //         content: finalAnswer,
+            //         contextNodeIds: contextNodeIds,
+            //         contextEdgeIds: contextEdgeIds,
+            //         references: ragData.references || [],
+            //     }
+            // });
+
+            //for mcp
+            return NextResponse.json({...ragData,answer: answerText || 'Tidak ada jawaban yang ditemukan.', references: references || []});
+
+            //for usual
+            // return NextResponse.json({...ragData,answer: finalAnswer || 'Tidak ada jawaban yang ditemukan.'});
         } catch (error) {
             console.error('Error calling Python API:', error);
             return NextResponse.json({ error: 'Failed to get response from AI service'}, {status: 502});
@@ -154,10 +218,86 @@ export async function POST(req: NextRequest, res: NextResponse){
             } catch (error) {
                 console.error('Error calling Python API for web search:', error);
                 // Fallback to regular chatAI if web search fails
-                answer = await chatAI(promptGeneral);
+                // answer = await chatAI(promptGeneral);
             }
         } else {
-            answer = await chatAI(promptGeneral);
+            // answer = await chatAI(promptGeneral);
+            const ragAnswer = await fetch(`${process.env.PY_URL}/mcp`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "tools/call",
+                    params: {
+                    name: "pral_chat",
+                    arguments: {
+                        question: promptGeneral, // atau promptGeneral
+                        session_id: sessionId,
+                        mode: mode === 'single node' ? 'single_node' : (mode === 'multiple node' ? 'multi_nodes' : 'general'),
+                        force_web: forceWeb
+                    }
+                    },
+                    id: 1
+                }),
+                signal: AbortSignal.timeout(30000)
+                });
+
+            if (!ragAnswer.ok) {
+                throw new Error(`Python API error: ${ragAnswer.status} ${ragAnswer.statusText}`);
+            }
+
+            const ragData = await ragAnswer.json();
+
+            console.log(ragData);
+
+            //this for python fastapi (main.py)
+            
+            // const finalAnswer = ragData.answer || ragData.response || 'Tidak ada jawaban yang ditemukan';
+
+            let answerText = ragData.result?.content?.[0]?.text || 'Tidak ada jawaban';
+
+            // Jika answerText berupa JSON string, parse dulu untuk ambil references
+
+            let parsedAnswer: any = answerText;
+            let references: any[] = [];
+            try {
+            parsedAnswer = JSON.parse(answerText);
+            // Jika hasil parsing punya references, ambil
+            if (parsedAnswer && parsedAnswer.references) {
+                references = parsedAnswer.references;
+                // Jika ingin, bisa juga ambil jawaban utama dari parsedAnswer.response atau parsedAnswer.answer
+                answerText = parsedAnswer.response || parsedAnswer.answer || answerText;
+            }
+            }   catch(error){
+                console.error('Error calling Python API:', error);
+                return NextResponse.json({ error: 'Failed to get response from AI service'}, {status: 502});
+            }
+
+            await prisma.chatMessage.create({
+                data: {
+                    sessionId,
+                    role: 'user',
+                    content: question,
+                    contextNodeIds: forceWeb ? null : contextNodeIds,
+                    contextEdgeIds: forceWeb ? null : contextEdgeIds,
+                    references: []
+                }
+            });
+
+            //for mcp
+            await prisma.chatMessage.create({
+                data: {
+                    sessionId,
+                    role: 'assistant',
+                    content: answerText,
+                    contextNodeIds: forceWeb ? null : contextNodeIds,
+                    contextEdgeIds: forceWeb ? null : contextEdgeIds,
+                    references: references || [],
+                }
+            });
+
+            return NextResponse.json({...ragData,answer: answerText || 'Tidak ada jawaban yang ditemukan.', references: references || []});
+
         }
 
         await prisma.chatMessage.create({
