@@ -38,6 +38,8 @@ import {
   IconChartDots,
   IconFolder,
   IconSearch,
+  IconFolderOpen,
+  IconFileText,
 } from '@tabler/icons-react';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { useRouter } from 'next/navigation';
@@ -511,14 +513,56 @@ export default function ProjectDashboard() {
               <CreateProjectCard />
             </Grid.Col>
 
-            {/* Existing projects */}
-            {filteredProjects.map((project) => (
-              <Grid.Col key={project.id} span={{ base: 12, sm: 6, lg: 4 }}>
-                <div onClick={() => router.push(`/projects/${project.id}`)}>
-                  <ProjectCard project={project} />
-                </div>
-              </Grid.Col>
-            ))}
+          {/* Existing projects */}
+          {filteredProjects.map((project) => (
+            <Grid.Col key={project.id} span={{ base: 12, sm: 6, lg: 4 }}>
+              <Card withBorder h={320} p="md">
+                <Stack gap="sm" h="100%">
+                  {/* Project content - clickable area */}
+                  <div 
+                    onClick={() => router.push(`/projects/${project.id}`)}
+                    style={{ 
+                      cursor: 'pointer',
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      minHeight: 0,
+                    }}
+                  >
+                    <ProjectCard project={project} />
+                  </div>
+
+                  {/* Action buttons at bottom */}
+                  <Group gap="xs" style={{ borderTop: '1px solid #e9ecef', paddingTop: 8 }}>
+                    <Button
+                      variant="light"
+                      size="xs"
+                      flex={1}
+                      leftSection={<IconFolderOpen size={14} />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/projects/${project.id}`);
+                      }}
+                    >
+                      Buka Project
+                    </Button>
+                    <Button
+                      variant="subtle"
+                      size="xs"
+                      flex={1}
+                      leftSection={<IconFileText size={14} />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/projects/${project.id}/draft`);
+                      }}
+                    >
+                      Draft
+                    </Button>
+                  </Group>
+                </Stack>
+              </Card>
+            </Grid.Col>
+          ))}
           </Grid>
         )}
 
