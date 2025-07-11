@@ -213,7 +213,7 @@ export default function NetworkGraph({
   }, [nodes, edges]);
 
   return (
-    <Box style={{ position: 'relative', width: '100%', height: '500px' }}>
+    <Box style={{ position: 'relative', width: '100%', height: '610px' }}>
       { isLoading && (
         <Loader
           size="xl"
