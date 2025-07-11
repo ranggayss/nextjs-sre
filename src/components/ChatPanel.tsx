@@ -19,15 +19,22 @@ import {
   Tooltip,
   Anchor,
   Popover,
+  Modal,
+  ThemeIcon,
+  CopyButton,
+  rem,
 } from '@mantine/core';
-import { IconX, IconUpload, IconDots, IconSearch, IconWorld } from '@tabler/icons-react';
+import { IconX, IconUpload, IconDots, IconSearch, IconWorld, IconCircleDot, IconCopy, IconCheck } from '@tabler/icons-react';
 import React, { useEffect, useState, useRef } from 'react';
 import { ExtendedNode, ExtendedEdge } from '../types';
 import { notifications } from '@mantine/notifications';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { SuggestionPanel } from './SuggestionPanel';
+import { ImprovedSuggestionPanel } from './SuggestionPanel2';
 import { useDebouncedValue } from '@mantine/hooks';
+import WebViewer from './WebViewer';
+import NodeDetail, { handleAnalytics } from './NodeDetail';
 
 interface ChatPanelProps {
   sessionId?: string;
@@ -70,6 +77,9 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestionContext, setSuggestionContext] = useState<'input' | 'response' | null>(null);
   const [debouncedInput] = useDebouncedValue(input, 500);
+  const [ selectedPDF, setSelectedPDF ] = useState<string | null>(null);
+  const [ modalOpened, setModalOpened] = useState(false);
+  const [detailModalNode, setDetailModalNode] = useState<any>(null);
 
   //for forceWeb
   const [forceWeb, setForceWeb] = useState(false);
@@ -299,16 +309,16 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
 
       // Debug log untuk melihat struktur response
       // Enhanced debug logging
-      console.log('🔍 Full API Response:', JSON.stringify(data, null, 2));
-      console.log('🔍 Raw References:', data.references);
-      console.log('🔍 References type:', typeof data.references);
-      console.log('🔍 References length:', data.references?.length);
+      // console.log('🔍 Full API Response:', JSON.stringify(data, null, 2));
+      // console.log('🔍 Raw References:', data.references);
+      // console.log('🔍 References type:', typeof data.references);
+      // console.log('🔍 References length:', data.references?.length);
 
       // More robust reference processing
       let processedReferences: Reference[] = [];
       if (data.references && Array.isArray(data.references)) {
         processedReferences = data.references.map((ref: any, idx: number) => {
-          console.log(`🔍 Processing reference ${idx}:`, ref);
+          // console.log(`🔍 Processing reference ${idx}:`, ref);
           
           // Handle different possible API response structures
           const processedRef = {
@@ -320,12 +330,12 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
             index: idx + 1
           };
           
-          console.log(`🔍 Processed reference ${idx}:`, processedRef);
+          // console.log(`🔍 Processed reference ${idx}:`, processedRef);
           return processedRef;
         });
       }
 
-      console.log('🔍 Final processed references:', processedReferences);
+      // console.log('🔍 Final processed references:', processedReferences);
 
       setMessages((m) => [...m, {sender: 'ai', text: data.answer, references: processedReferences || []}]);
 
@@ -478,6 +488,31 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
     )
   }
 
+  const handlerOpenPdf = async (url: string) => {
+    if (url.startsWith('graph://node/')){
+      const nodeId = url.split('graph://node/')[1];
+
+      try {
+        const res = await fetch(`/api/nodes/${nodeId}`);
+
+        const data = await res.json();
+
+        if (res.ok){
+          setDetailModalNode(data);
+        } else {
+          console.error('Node not found', data);
+        }
+
+      } catch (error) {
+        console.error("Error fetching node", error);
+      }
+    } else {
+      setSelectedPDF(url);
+      setModalOpened(true);
+    }
+  }
+
+
 const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: number }) => {
   const [opened, setOpened] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -517,8 +552,9 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
     >
       <Popover.Target>
         <Anchor
-          href={reference.url}
-          target="_blank"
+          // href={reference.url}
+          // target="_blank"
+          onClick={() => handlerOpenPdf(reference.url)}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
           style={{
@@ -563,8 +599,9 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
             {reference.preview}
           </Box>
           <Anchor
-            href={reference.url}
-            target="_blank"
+            // href={reference.url}
+            // target="_blank"
+            onClick={() => handlerOpenPdf(reference.url)}
             size="xs"
             style={{
               wordBreak: 'break-all',
@@ -588,10 +625,10 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
 
   // Enhanced helper function to process text with references
   const processTextWithReferences = (text: string, references: Reference[]) => {
-    console.log('🔍 Processing text with references:', { text, references });
+    // console.log('🔍 Processing text with references:', { text, references });
     
     if (!references || references.length === 0) {
-      console.log('🔍 No references to process');
+      // console.log('🔍 No references to process');
       return text;
     }
 
@@ -606,7 +643,7 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
         refMap.set(ref.ref_mark, ref);
       });
 
-      console.log('🔍 Reference map:', refMap);
+      // console.log('🔍 Reference map:', refMap);
 
       // Find all reference marks in the text
       const refMarkPattern = /\[[^\]]+\]/g;
@@ -618,7 +655,7 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
         const refMark = match[0];
         const matchStart = match.index;
         
-        console.log('🔍 Found reference mark:', refMark, 'at position:', matchStart);
+        // console.log('🔍 Found reference mark:', refMark, 'at position:', matchStart);
         
         // Add text before the reference mark
         if (matchStart > currentIndex) {
@@ -628,7 +665,7 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
         // Add the reference component if it exists in our map
         const reference = refMap.get(refMark);
         if (reference) {
-          console.log('🔍 Adding reference component for:', refMark);
+          // console.log('🔍 Adding reference component for:', refMark);
           const order = seenRefMarks.has(refMark) ? Array.from(seenRefMarks).indexOf(refMark) + 1 : dynamicIndex++;
 
           seenRefMarks.add(refMark);
@@ -641,7 +678,7 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
             />
           );
         } else {
-          console.log('🔍 Reference not found in map, adding as plain text:', refMark);
+          // console.log('🔍 Reference not found in map, adding as plain text:', refMark);
           parts.push(refMark);
         }
         
@@ -653,7 +690,7 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
         parts.push(text.substring(currentIndex));
       }
 
-      console.log('🔍 Final parts:', parts);
+      // console.log('🔍 Final parts:', parts);
       return parts.length > 0 ? parts : text;
     } catch (error) {
       console.error('🔍 Error processing text with references:', error);
@@ -663,12 +700,12 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
 
 
   return (
-    <Box style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '90vh', overflow: 'hidden'}}>
+    <Box style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '90vh', overflow: 'hidden', position:'relative'}}>
       {/* Chat History */}
       <ScrollArea 
         ref={scrollAreaRef}
         style={{ 
-          height: '535px',
+          height: '610px',
           minHeight: 0,
         }}
         styles={{
@@ -711,12 +748,49 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
                 alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', backgroundColor: msg.sender === 'user' ? (isDark ? theme.colors.blue[9] : '#e0f7fa') : (isDark ? theme.colors.dark[6] : '#f3f4f6'),
                 color: isDark ? theme.colors.gray[2] : theme.black, maxWidth: '100%',
                 padding: '20px',
+                position: 'relative'
               }}
             >
-              <Text size="md" c="dimmed" mb="xs"> 
-                {msg.sender === 'user' ? 'Anda' : 'AI'}
-              </Text>
-              {msg.sender === 'user' ? (
+              <Group justify="space-between" mb="xs">
+                <Text size="lg" c="dimmed"> 
+                  {msg.sender === 'user' ? 'Anda' : 'AI'}
+                </Text>
+                {/* Copy Button - hanya untuk AI response */}
+                {msg.sender === 'ai' && (
+                  <CopyButton value={msg.text} timeout={2000}>
+                    {({ copied, copy }) => (
+                      <Tooltip 
+                        label={copied ? 'Berhasil disalin!' : 'Salin jawaban'} 
+                        position="top"
+                        withArrow
+                      >
+                        <ActionIcon
+                          variant="subtle"
+                          size="sm"
+                          onClick={copy}
+                          style={{
+                            transition: 'all 0.2s ease',
+                            transform: copied ? 'scale(1.1)' : 'scale(1)',
+                          }}
+                        >
+                          {copied ? (
+                            <IconCheck 
+                              size={16} 
+                              style={{ color: theme.colors.green[6] }} 
+                            />
+                          ) : (
+                            <IconCopy 
+                              size={16} 
+                              style={{ color: theme.colors.gray[6] }} 
+                            />
+                          )}
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
+                  </CopyButton>
+                )}
+              </Group>
+                {msg.sender === 'user' ? (
                 <Text size='sm' style={{ whiteSpace: 'pre-wrap'}}>{msg.text}</Text>
               ) : (
                 <TypographyStylesProvider>
@@ -911,10 +985,14 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
                           <Group key={`${ref.url}-${ref.ref_mark}`} gap={4} align="flex-start">
                             <Text size="xs">{ref.ref_mark}</Text>
                             <Anchor 
-                              href={ref.url} 
-                              target="_blank" 
+                              href='#'
+                              // target="_blank" 
                               size="xs"
                               style={{ wordBreak: 'break-all' }}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handlerOpenPdf(ref.url);
+                              }}
                             >
                               {ref.text}
                             </Anchor>
@@ -965,9 +1043,11 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
         style={{ 
           flexShrink: 0,
           borderTop: '1px solid #e9ecef',
-          backgroundClip: 'var(--mantine-color-body)',  
+          backgroundClip: 'var(--mantine-color-body)',
+          //for suggestionpanel2
+          position: 'relative'  
         }}>
-        <Button
+        {/* <Button
           onClick={fetchInitialSuggestions}
           size='xs'
           variant='light'
@@ -982,13 +1062,13 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
           onSuggestionClick={handleSuggestionClick}
           onClose={handleCloseSuggestions}
         />
-      )}
+      )} */}
 
         <Group mt="xs" gap="sm" align="flex-end">
           <Textarea
             placeholder={isLoading ? "Menunggu Respon AI" : "Ketik pertanyaan..."}
             autosize
-            minRows={3}
+            minRows={1}
             maxRows={4}
             value={input}
             onChange={(e) => setInput(e.currentTarget.value)}
@@ -1010,7 +1090,7 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
           </ActionIcon> */}
             <Tooltip label={forceWeb ? "Pencarian web aktif" : "Pencarian web nonaktif"} position="top" withArrow>
               <Switch
-                size="md"
+                size="lg"
                 checked={forceWeb}
                 onChange={(event) => setForceWeb(event.currentTarget.checked)}
                 thumbIcon={
@@ -1032,9 +1112,76 @@ const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: n
           onChange={onFileChange}
           accept='application/pdf'  
         />
+      {/* Suggestion Panel sebagai overlay */}
+      {showSuggestions && suggestions.length > 0 && (
+        <ImprovedSuggestionPanel
+          suggestions={suggestions}
+          context={suggestionContext}
+          onSuggestionClick={handleSuggestionClick}
+          onClose={handleCloseSuggestions}
+          onRefreshSuggestions={fetchInitialSuggestions}
+        />
+      )}
       </Box>
+      <Modal
+          opened={modalOpened}
+          onClose={() => {
+              setModalOpened(false);
+              setSelectedPDF(null);
+          }}
+          title="Lihat Artikel"
+          size="90%"
+          padding="sm"
+          centered
+          overlayProps={{ blur: 3 }}
+          styles={{
+              content: {
+              height: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: 0,
+              position: 'relative', 
+              },
+              body: {
+              flex: 1,
+              overflow: 'hidden',
+              padding: 0,
+              position: 'relative', 
+              },
+          }}
+          >
+          {selectedPDF && (
+              <div style={{ height: '100%', position: 'relative' }}>
+              <WebViewer fileUrl={selectedPDF} onAnalytics={handleAnalytics} />
+              </div>
+          )}
+      </Modal>
 
-      
+            {/* Enhanced Modals */}
+      <Modal
+        opened={!!detailModalNode}
+        onClose={() => {
+          setDetailModalNode(null);
+        }}
+        title={
+          <Group gap="sm">
+            <ThemeIcon variant="light" color="blue" size="md">
+              <IconCircleDot size={16} />
+            </ThemeIcon>
+            <Box>
+              <Text fw={600}>{detailModalNode?.title || 'Detail Artikel'}</Text>
+              <Text size="xs" c="dimmed">Informasi lengkap artikel</Text>
+            </Box>
+          </Group>
+        }
+        size="75vw"
+        radius="lg"
+        shadow="xl"
+      >
+        <NodeDetail node={detailModalNode} onClose={() => {
+          setDetailModalNode(null);
+        }} />
+      </Modal>
     </Box>
   );
 }
