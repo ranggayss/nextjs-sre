@@ -158,18 +158,41 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           },
         });
 
-        await fetch(`${process.env.PY_URL}/api/process-pdf`, {
+        //this for mainpy(fastapi)
+        
+        // await fetch(`${process.env.PY_URL}/api/process-pdf`, {
+        //   method: "POST",
+        //   headers: {
+        //     "Content-Type": "application/json",
+        //   },
+        //   body: JSON.stringify({
+        //     pdf_url: `${publicUrl}`,
+        //     session_id: sessionId,
+        //     node_id: node.id,
+        //     metadata: {
+        //       title: title,
+        //     }
+        //   })
+        // });
+        
+
+        //this for mcp_server
+        await fetch(`${process.env.PY_URL}/mcp`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            pdf_url: `${publicUrl}`,
-            session_id: sessionId,
-            node_id: node.id,
-            metadata: {
-              title: title,
-            }
+            jsonrpc: "2.0",
+            method: "tools/call",
+            params: {
+              name: "process_pdf",
+              arguments: {
+                pdf_url: publicUrl,
+                session_id: sessionId,
+                node_id: node.id,
+                metadata: { title }
+              }
+            },
+            id: 1
           })
         });
         
