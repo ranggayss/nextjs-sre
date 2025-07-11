@@ -15,7 +15,7 @@ import type {
   NewHighlight,
   ScaledPosition,
 } from 'react-pdf-highlighter';
-import { Button, Group, Card, Text, ScrollArea, Title, Divider, Stack } from '@mantine/core';
+import { Button, Group, Card, Text, ScrollArea, Title, Divider, Stack, useMantineColorScheme, useMantineTheme } from '@mantine/core';
 import 'react-pdf-highlighter/dist/style.css';
 
 interface WebViewerProps {
@@ -26,6 +26,11 @@ interface WebViewerProps {
 const WebViewer: React.FC<WebViewerProps> = ({ fileUrl, onAnalytics }) => {
   const [highlights, setHighlights] = useState<IHighlight[]>([]);
   const scrollViewerTo = useRef<(highlight: IHighlight) => void>(() => {});
+  
+  // Dark mode support
+  const { colorScheme } = useMantineColorScheme();
+  const theme = useMantineTheme();
+  const isDark = colorScheme === 'dark';
 
   const parseIdFromHash = () =>
     document.location.hash.replace(/^#highlight-/, '');
@@ -120,160 +125,214 @@ const WebViewer: React.FC<WebViewerProps> = ({ fileUrl, onAnalytics }) => {
 
   const HighlightPopup = ({ comment }: { comment: { text: string; emoji: string } }) =>
     comment?.text ? (
-      <div className="Highlight__popup">
+      <div 
+        className="Highlight__popup"
+        style={{
+          backgroundColor: isDark ? theme.colors.dark[6] : theme.colors.gray[0],
+          color: isDark ? theme.colors.gray[0] : theme.colors.dark[7],
+          border: `1px solid ${isDark ? theme.colors.dark[4] : theme.colors.gray[3]}`,
+          borderRadius: theme.radius.sm,
+          padding: '8px 12px',
+          boxShadow: isDark 
+            ? `0 2px 8px ${theme.colors.dark[9]}` 
+            : `0 2px 8px ${theme.colors.gray[3]}`,
+        }}
+      >
         {comment.emoji} {comment.text}
       </div>
     ) : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Group justify="end" p="sm">
-        <Button onClick={handleDownload} variant="light" size="xs">
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%',
+      backgroundColor: isDark ? theme.colors.dark[7] : theme.colors.gray[0],
+      color: isDark ? theme.colors.gray[0] : theme.colors.dark[7],
+    }}>
+      <Group justify="end" p="sm" style={{
+        backgroundColor: isDark ? theme.colors.dark[6] : theme.colors.gray[1],
+        borderBottom: `1px solid ${isDark ? theme.colors.dark[4] : theme.colors.gray[3]}`,
+      }}>
+        <Button 
+          onClick={handleDownload} 
+          variant="light" 
+          size="xs"
+          color={isDark ? 'blue' : 'blue'}
+        >
           Download PDF
         </Button>
       </Group>
 
       <div style={{ display: 'flex', height: '100%' }}>
         {/* Kiri: PDF Viewer */}
-        <div style={{ flex: 3, position: 'relative' }}>
-            <PdfLoader url={fileUrl} beforeLoad={<div>Loading...</div>}>
+        <div style={{ 
+          flex: 3, 
+          position: 'relative',
+          backgroundColor: isDark ? theme.colors.dark[8] : theme.colors.gray[0],
+        }}>
+          <PdfLoader url={fileUrl} beforeLoad={
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              backgroundColor: isDark ? theme.colors.dark[7] : theme.colors.gray[0],
+              color: isDark ? theme.colors.gray[0] : theme.colors.dark[7],
+            }}>
+              Loading...
+            </div>
+          }>
             {(pdfDocument) => (
-                <PdfHighlighter
+              <PdfHighlighter
                 pdfDocument={pdfDocument}
                 enableAreaSelection={(event) => event.altKey}
                 scrollRef={(scrollTo) => {
-                    scrollViewerTo.current = scrollTo;
-                    scrollToHighlightFromHash();
+                  scrollViewerTo.current = scrollTo;
+                  scrollToHighlightFromHash();
                 }}
                 onScrollChange={resetHash}
                 onSelectionFinished={(
-                    position,
-                    content,
-                    hideTipAndSelection,
-                    transformSelection
+                  position,
+                  content,
+                  hideTipAndSelection,
+                  transformSelection
                 ) => (
-                    <Tip
+                  <Tip
                     onOpen={transformSelection}
                     onConfirm={(comment) => {
-                        addHighlight({ content, position, comment });
-                        hideTipAndSelection();
+                      addHighlight({ content, position, comment });
+                      hideTipAndSelection();
                     }}
-                    />
+                  />
                 )}
                 highlightTransform={(
-                    highlight,
-                    index,
-                    setTip,
-                    hideTip,
-                    viewportToScaled,
-                    screenshot,
-                    isScrolledTo
+                  highlight,
+                  index,
+                  setTip,
+                  hideTip,
+                  viewportToScaled,
+                  screenshot,
+                  isScrolledTo
                 ) => {
-                    const isTextHighlight = !highlight.content?.image;
+                  const isTextHighlight = !highlight.content?.image;
 
-                    const component = isTextHighlight ? (
+                  const component = isTextHighlight ? (
                     <Highlight
-                        isScrolledTo={isScrolledTo}
-                        position={highlight.position}
-                        comment={highlight.comment}
+                      isScrolledTo={isScrolledTo}
+                      position={highlight.position}
+                      comment={highlight.comment}
                     />
-                    ) : (
+                  ) : (
                     <AreaHighlight
-                        isScrolledTo={isScrolledTo}
-                        highlight={highlight}
-                        onChange={(boundingRect) => {
+                      isScrolledTo={isScrolledTo}
+                      highlight={highlight}
+                      onChange={(boundingRect) => {
                         updateHighlight(
-                            highlight.id,
-                            { boundingRect: viewportToScaled(boundingRect) },
-                            { image: screenshot(boundingRect) }
+                          highlight.id,
+                          { boundingRect: viewportToScaled(boundingRect) },
+                          { image: screenshot(boundingRect) }
                         );
-                        }}
+                      }}
                     />
-                    );
+                  );
 
-                    return (
+                  return (
                     <Popup
-                        popupContent={<HighlightPopup comment={highlight.comment} />}
-                        onMouseOver={() =>
+                      popupContent={<HighlightPopup comment={highlight.comment} />}
+                      onMouseOver={() =>
                         setTip(highlight, () => (
-                            <HighlightPopup comment={highlight.comment} />
+                          <HighlightPopup comment={highlight.comment} />
                         ))
-                        }
-                        onMouseOut={hideTip}
-                        key={index}
+                      }
+                      onMouseOut={hideTip}
+                      key={index}
                     >
-                        {component}
+                      {component}
                     </Popup>
-                    );
+                  );
                 }}
                 highlights={highlights}
-                />
+              />
             )}
-            </PdfLoader>
+          </PdfLoader>
         </div>
 
         {/* Kanan: Sidebar highlights */}
         <div
-            style={{
+          style={{
             flex: 1,
-            borderLeft: '1px solid #eee',
-            backgroundColor: '#fdfdfd',
+            borderLeft: `1px solid ${isDark ? theme.colors.dark[4] : theme.colors.gray[3]}`,
+            backgroundColor: isDark ? theme.colors.dark[6] : theme.colors.gray[0],
             padding: '1rem',
             overflowY: 'auto',
-            }}
+          }}
         >
-            <Title order={5} mb="sm">
+          <Title order={5} mb="sm" c={isDark ? 'gray.0' : 'dark.7'}>
             📌 Highlighted Notes
-            </Title>
-            <Divider mb="sm" />
+          </Title>
+          <Divider mb="sm" color={isDark ? theme.colors.dark[4] : theme.colors.gray[3]} />
 
-            <ScrollArea h="100%">
+          <ScrollArea h="100%">
             <Stack>
-                {highlights.length === 0 ? (
+              {highlights.length === 0 ? (
                 <Text c="dimmed" size="sm">
-                    Belum ada highlight.
+                  Belum ada highlight.
                 </Text>
-                ) : (
+              ) : (
                 highlights.map((h) => {
-                    const text =
+                  const text =
                     typeof h.content === 'string'
-                        ? h.content
-                        : h.content?.text || '';
+                      ? h.content
+                      : h.content?.text || '';
 
-                    return (
+                  return (
                     <Card
-                        key={h.id}
-                        withBorder
-                        radius="md"
-                        shadow="sm"
-                        onClick={() => scrollViewerTo.current(h)}
-                        style={{ cursor: 'pointer', transition: '0.2s' }}
-                        bg="white"
-                        mih={80}
+                      key={h.id}
+                      withBorder
+                      radius="md"
+                      shadow="sm"
+                      onClick={() => scrollViewerTo.current(h)}
+                      style={{ 
+                        cursor: 'pointer', 
+                        transition: '0.2s',
+                        backgroundColor: isDark ? theme.colors.dark[5] : theme.colors.gray[0],
+                        borderColor: isDark ? theme.colors.dark[4] : theme.colors.gray[3],
+                      }}
+                      mih={80}
                     >
-                        <Text size="xs" c="dimmed" mb={4}>
+                      <Text size="xs" c="dimmed" mb={4}>
                         📄 Page {h.position.pageNumber}
-                        </Text>
+                      </Text>
 
-                        {text && (
-                        <Text size="sm" fw={500} lineClamp={3} mb={4}>
-                            {text}
+                      {text && (
+                        <Text 
+                          size="sm" 
+                          fw={500} 
+                          lineClamp={3} 
+                          mb={4}
+                          c={isDark ? 'gray.0' : 'dark.7'}
+                        >
+                          {text}
                         </Text>
-                        )}
+                      )}
 
-                        {h.comment?.text && (
-                        <Text size="sm" c="gray.7">
-                            💬 {h.comment.emoji} {h.comment.text}
+                      {h.comment?.text && (
+                        <Text 
+                          size="sm" 
+                          c={isDark ? 'gray.3' : 'gray.7'}
+                        >
+                          💬 {h.comment.emoji} {h.comment.text}
                         </Text>
-                        )}
+                      )}
                     </Card>
-                    );
+                  );
                 })
-                )}
+              )}
             </Stack>
-            </ScrollArea>
+          </ScrollArea>
         </div>
-        </div>
+      </div>
     </div>
   );
 };
