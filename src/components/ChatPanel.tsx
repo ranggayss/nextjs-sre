@@ -15,13 +15,26 @@ import {
   useMantineColorScheme,
   useMantineTheme,
   Loader,
+  Switch,
+  Tooltip,
+  Anchor,
+  Popover,
+  Modal,
+  ThemeIcon,
+  CopyButton,
+  rem,
 } from '@mantine/core';
-import { IconX, IconUpload, IconDots } from '@tabler/icons-react';
+import { IconX, IconUpload, IconDots, IconSearch, IconWorld, IconCircleDot, IconCopy, IconCheck } from '@tabler/icons-react';
 import React, { useEffect, useState, useRef } from 'react';
 import { ExtendedNode, ExtendedEdge } from '../types';
 import { notifications } from '@mantine/notifications';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { SuggestionPanel } from './SuggestionPanel';
+import { ImprovedSuggestionPanel } from './SuggestionPanel2';
+import { useDebouncedValue } from '@mantine/hooks';
+import WebViewer from './WebViewer';
+import NodeDetail, { handleAnalytics } from './NodeDetail';
 
 interface ChatPanelProps {
   sessionId?: string;
@@ -29,11 +42,21 @@ interface ChatPanelProps {
   selectedEdge: ExtendedEdge | null;
 };
 
+type Reference = {
+  url: string;
+  text: string;
+  preview: string;
+  ref_mark: string;
+  type?: string;
+  index?: number;
+}
+
 type ChatMessage = {
   sender: 'user' | 'ai';
   text: string;
   contextNodeIds?: string[];
   contextEdgeIds?: string[];
+  references?: Reference[];
 };
 
 export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: ChatPanelProps) {
@@ -49,6 +72,18 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
   const theme = useMantineTheme();
   const isDark = colorScheme === 'dark';
 
+  //state for suggestion
+  const [suggestions, setSuggestions] = useState<string []>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionContext, setSuggestionContext] = useState<'input' | 'response' | null>(null);
+  const [debouncedInput] = useDebouncedValue(input, 500);
+  const [ selectedPDF, setSelectedPDF ] = useState<string | null>(null);
+  const [ modalOpened, setModalOpened] = useState(false);
+  const [detailModalNode, setDetailModalNode] = useState<any>(null);
+
+  //for forceWeb
+  const [forceWeb, setForceWeb] = useState(false);
+
   useEffect(() => {
     const fetchChatMessages = async () => {
       try {        
@@ -60,6 +95,7 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
           text: msg.content,
           contextNodeIds: msg.contextNodeIds || [],
           contextEdgeIds: msg.contextEdgeIds || [],
+          references: msg.references || [],
         }));
   
         setMessages(formatted);
@@ -100,8 +136,119 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
   scrollToBottom();
  }, [messages, isLoading]);
 
+ 
+  const fetchInputSuggestion = async (query: string) => {
+    if (!query.trim() || query.length < 3){
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      const response = await fetch ('/api/suggestions/input', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          query,
+          context: {
+            nodeIds: contextNodes.map(n => n.id),
+            edgeIds: contextEdges.map(e => e.id),
+          },
+          suggestion_type: "input"
+        }),
+      });
+
+      const data = await response.json();
+      setSuggestions(data.suggestions || []);
+      setSuggestionContext('input');
+      setShowSuggestions(true);
+    } catch (error) {
+      console.error('failed to fetch input suggestions:', error);
+      setSuggestions([]);
+    }
+  };
+
+  const fetchInitialSuggestions = async () => {
+    let mode: 'general' | 'single node' | 'multiple node' = 'general';
+
+    if (contextNodes.length === 1) mode = 'single node';
+    else if (contextNodes.length > 1) mode = 'multiple node';
+
+    try {
+      const res = await fetch('/api/suggestions/input', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: "",
+          context: {
+            nodeIds: contextNodes.map(n => n.id),
+            edgeIds: contextEdges.map(e => e.id),
+          },
+          suggestion_type: "input", // tetap gunakan input
+          mode
+        })
+      });
+
+      const data = await res.json();
+      setSuggestions(data.suggestions || []);
+      setShowSuggestions(true);
+      setSuggestionContext('input');
+    } catch (err) {
+      console.error('Failed to fetch initial suggestions:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchInitialSuggestions();
+  }, [contextNodes.length, contextEdges.length]);
+
+  
+  const fetchFollowupSuggestions = async (lastMessage: string) => {
+    try {
+
+      const res = await fetch ('/api/suggestions/followup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          lastMessage: lastMessage,
+          conversationHistory: messages.slice(-1),
+          context: {
+            nodeIds: contextNodes.map(n => n.id),
+            edgeIds: contextEdges.map(e => e.id),
+          }
+        }),
+      });
+
+      const data = await res.json();
+      setSuggestions(data.suggestions || []);
+      setSuggestionContext('response');
+      setShowSuggestions(true);
+    } catch (error) {
+      console.error('Failed to fetch followup suggestions:', error);
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+
+  // useEffect(() => {
+  //   if (debouncedInput.length > 0){
+  //     setSuggestions([]);
+  //     setShowSuggestions(false);
+  //   } 
+  // }, [debouncedInput]);
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
+
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setSuggestionContext(null);
+
     setMessages((prev) => [...prev, {sender: 'user', text: input}]);
     const currentInput = input;
     setInput('');
@@ -124,6 +271,7 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
         question: currentInput,
         contextNodeIds: contextNodes.map((n) => n.id),
         contextEdgeIds: contextEdges.map((e) => e.id),
+        forceWeb,
         mode: 'general',
       };
     } else if (contextNodes.length === 1){
@@ -132,6 +280,7 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
         question: currentInput,
         contextNodeIds: contextNodes.map((n) => n.id),
         contextEdgeIds: contextEdges.map((e) => e.id),
+        forceWeb,
         mode: 'single node',
         nodeId: contextNodes[0].id,
       };
@@ -141,21 +290,11 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
         question: currentInput,
         contextNodeIds: contextNodes.map((n) => n.id),
         contextEdgeIds: contextEdges.map((e) => e.id),
+        forceWeb,
         mode: 'multiple node',
         nodeIds: contextNodes.map((n) => n.id), //[1, 2]
       }
     };
-
-    /*
-    const payload = selectedNode ? {
-      mode: 'node',
-      nodeId: selectedNode.id,
-      question: currentInput,
-    } : {
-      mode: 'general',
-      question: currentInput,
-    };
-    */
 
     try {
       const result = await fetch('/api/chat', {
@@ -168,12 +307,48 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
 
       const data = await result.json();
 
-      setMessages((m) => [...m, {sender: 'ai', text: data.answer}]);
+      // Debug log untuk melihat struktur response
+      // Enhanced debug logging
+      // console.log('🔍 Full API Response:', JSON.stringify(data, null, 2));
+      // console.log('🔍 Raw References:', data.references);
+      // console.log('🔍 References type:', typeof data.references);
+      // console.log('🔍 References length:', data.references?.length);
+
+      // More robust reference processing
+      let processedReferences: Reference[] = [];
+      if (data.references && Array.isArray(data.references)) {
+        processedReferences = data.references.map((ref: any, idx: number) => {
+          // console.log(`🔍 Processing reference ${idx}:`, ref);
+          
+          // Handle different possible API response structures
+          const processedRef = {
+            url: ref.url || ref.source_url || ref.link || '#',
+            text: ref.text || ref.title || ref.document_preview || `Reference ${idx + 1}`,
+            preview: ref.preview || ref.document_preview || ref.text || 'No preview available',
+            ref_mark: ref.ref_mark || `[${idx + 1}]`,
+            type: ref.type || 'document',
+            index: idx + 1
+          };
+          
+          // console.log(`🔍 Processed reference ${idx}:`, processedRef);
+          return processedRef;
+        });
+      }
+
+      // console.log('🔍 Final processed references:', processedReferences);
+
+      setMessages((m) => [...m, {sender: 'ai', text: data.answer, references: processedReferences || []}]);
+
+      setTimeout(async () => {
+        await fetchFollowupSuggestions(data.answer);
+      }, 500);
+
     } catch (error) {
       setMessages((m) => [...m, {sender: 'ai', text: 'terjadi kesalahan dalam menjawab pertanyaan'}]);
     } finally{
       setIsLoading(false);
     }
+    
   };
 
   const addContextNode = (node: ExtendedNode) => {
@@ -259,6 +434,33 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
     }
   };
 
+  const handleSuggestionClick = (suggestion: string) => {
+    setInput(suggestion);
+    setShowSuggestions(false);
+    setSuggestions([]);
+
+    setTimeout(() => {
+      const textarea = document.querySelector('textarea');
+      textarea?.focus();
+    }, 100);
+  };
+
+  const handleCloseSuggestions = () => {
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setSuggestionContext(null);
+  };
+
+
+  //cleanup
+  useEffect(() => {
+    return () => {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSuggestionContext(null);
+    }
+  }, [])
+ 
   const LoadingMessage = () => {
     return(
     <Paper
@@ -286,13 +488,224 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
     )
   }
 
+  const handlerOpenPdf = async (url: string) => {
+    if (url.startsWith('graph://node/')){
+      const nodeId = url.split('graph://node/')[1];
+
+      try {
+        const res = await fetch(`/api/nodes/${nodeId}`);
+
+        const data = await res.json();
+
+        if (res.ok){
+          setDetailModalNode(data);
+        } else {
+          console.error('Node not found', data);
+        }
+
+      } catch (error) {
+        console.error("Error fetching node", error);
+      }
+    } else {
+      setSelectedPDF(url);
+      setModalOpened(true);
+    }
+  }
+
+
+const ReferenceTooltip = ({ reference, order }: { reference: Reference, order: number }) => {
+  const [opened, setOpened] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => setOpened(true), 100);
+  };
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => setOpened(false), 1000);
+  };
+
+  const handlePopoverMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+  };
+
+  const handlePopoverMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => setOpened(false), 1000);
+  };
+
   return (
-    <Box style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '100vh', overflow: 'hidden'}}>
+    <Popover 
+      width={350}
+      position="bottom"
+      withArrow
+      shadow="md"
+      offset={5}
+      withinPortal
+      opened={opened}
+      onClose={() => setOpened(false)}
+      transitionProps={{ duration: 200 }}
+    >
+      <Popover.Target>
+        <Anchor
+          // href={reference.url}
+          // target="_blank"
+          onClick={() => handlerOpenPdf(reference.url)}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          style={{
+            color: theme.colors.blue[6],
+            textDecoration: 'underline',
+            cursor: 'pointer',
+            backgroundColor: theme.colors.blue[0],
+            padding: '2px 6px',
+            borderRadius: '4px',
+            fontSize: '0.8rem',
+            fontWeight: 500,
+            display: 'inline-block',
+            marginLeft: '2px',
+            marginRight: '2px',
+          }}
+        >
+          {reference.ref_mark}
+        </Anchor>
+      </Popover.Target>
+      <Popover.Dropdown
+        onMouseEnter={handlePopoverMouseEnter}
+        onMouseLeave={handlePopoverMouseLeave}
+      >
+        <Box p="sm" style={{ maxWidth: 320 }}>
+          <Text size="sm" fw={500} mb={4}>
+            Referensi {order}
+          </Text>
+          <Box
+            mt={4}
+            style={{
+              fontSize: '0.75rem',
+              wordBreak: 'break-word',
+              lineHeight: 1.4,
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: 4,
+              WebkitBoxOrient: 'vertical',
+              color: 'inherit',
+              marginBottom: '8px'
+            }}
+          >
+            {reference.preview}
+          </Box>
+          <Anchor
+            // href={reference.url}
+            // target="_blank"
+            onClick={() => handlerOpenPdf(reference.url)}
+            size="xs"
+            style={{
+              wordBreak: 'break-all',
+              color: '#228be6',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              backgroundColor: 'rgba(34, 139, 230, 0.1)',
+              display: 'inline-block',
+              border: '1px solid rgba(34, 139, 230, 0.3)',
+            }}
+          >
+            🔗 Buka Dokumen Lengkap
+          </Anchor>
+        </Box>
+      </Popover.Dropdown>
+    </Popover>
+  );
+};
+
+  // Enhanced helper function to process text with references
+  const processTextWithReferences = (text: string, references: Reference[]) => {
+    // console.log('🔍 Processing text with references:', { text, references });
+    
+    if (!references || references.length === 0) {
+      // console.log('🔍 No references to process');
+      return text;
+    }
+
+    try {
+      const parts = [];
+      let remainingText = text;
+      let currentIndex = 0;
+
+      // Create a map of reference marks to reference objects
+      const refMap = new Map();
+      references.forEach(ref => {
+        refMap.set(ref.ref_mark, ref);
+      });
+
+      // console.log('🔍 Reference map:', refMap);
+
+      // Find all reference marks in the text
+      const refMarkPattern = /\[[^\]]+\]/g;
+      const seenRefMarks = new Set<string>();
+      let dynamicIndex = 1;
+      let match;
+      
+      while ((match = refMarkPattern.exec(text)) !== null) {
+        const refMark = match[0];
+        const matchStart = match.index;
+        
+        // console.log('🔍 Found reference mark:', refMark, 'at position:', matchStart);
+        
+        // Add text before the reference mark
+        if (matchStart > currentIndex) {
+          parts.push(text.substring(currentIndex, matchStart));
+        }
+        
+        // Add the reference component if it exists in our map
+        const reference = refMap.get(refMark);
+        if (reference) {
+          // console.log('🔍 Adding reference component for:', refMark);
+          const order = seenRefMarks.has(refMark) ? Array.from(seenRefMarks).indexOf(refMark) + 1 : dynamicIndex++;
+
+          seenRefMarks.add(refMark);
+
+          parts.push(
+            <ReferenceTooltip 
+              key={`${reference.url}-${reference.ref_mark}-${matchStart}`} 
+              reference={reference}
+              order={order} 
+            />
+          );
+        } else {
+          // console.log('🔍 Reference not found in map, adding as plain text:', refMark);
+          parts.push(refMark);
+        }
+        
+        currentIndex = matchStart + refMark.length;
+      }
+      
+      // Add any remaining text
+      if (currentIndex < text.length) {
+        parts.push(text.substring(currentIndex));
+      }
+
+      // console.log('🔍 Final parts:', parts);
+      return parts.length > 0 ? parts : text;
+    } catch (error) {
+      console.error('🔍 Error processing text with references:', error);
+      return text;
+    }
+  };
+
+
+  return (
+    <Box style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '90vh', overflow: 'hidden', position:'relative'}}>
       {/* Chat History */}
       <ScrollArea 
         ref={scrollAreaRef}
         style={{ 
-          height: '535px',
+          height: '610px',
           minHeight: 0,
         }}
         styles={{
@@ -335,21 +748,93 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
                 alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', backgroundColor: msg.sender === 'user' ? (isDark ? theme.colors.blue[9] : '#e0f7fa') : (isDark ? theme.colors.dark[6] : '#f3f4f6'),
                 color: isDark ? theme.colors.gray[2] : theme.black, maxWidth: '100%',
                 padding: '20px',
+                position: 'relative'
               }}
             >
-              <Text size="md" c="dimmed" mb="xs"> 
-                {msg.sender === 'user' ? 'Anda' : 'AI'}
-              </Text>
-              {msg.sender === 'user' ? (
+              <Group justify="space-between" mb="xs">
+                <Text size="lg" c="dimmed"> 
+                  {msg.sender === 'user' ? 'Anda' : 'AI'}
+                </Text>
+                {/* Copy Button - hanya untuk AI response */}
+                {msg.sender === 'ai' && (
+                  <CopyButton value={msg.text} timeout={2000}>
+                    {({ copied, copy }) => (
+                      <Tooltip 
+                        label={copied ? 'Berhasil disalin!' : 'Salin jawaban'} 
+                        position="top"
+                        withArrow
+                      >
+                        <ActionIcon
+                          variant="subtle"
+                          size="sm"
+                          onClick={copy}
+                          style={{
+                            transition: 'all 0.2s ease',
+                            transform: copied ? 'scale(1.1)' : 'scale(1)',
+                          }}
+                        >
+                          {copied ? (
+                            <IconCheck 
+                              size={16} 
+                              style={{ color: theme.colors.green[6] }} 
+                            />
+                          ) : (
+                            <IconCopy 
+                              size={16} 
+                              style={{ color: theme.colors.gray[6] }} 
+                            />
+                          )}
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
+                  </CopyButton>
+                )}
+              </Group>
+                {msg.sender === 'user' ? (
                 <Text size='sm' style={{ whiteSpace: 'pre-wrap'}}>{msg.text}</Text>
               ) : (
                 <TypographyStylesProvider>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      p: ({children}) => (
-                        <Text size ="sm" mb="xs">{children}</Text>
-                      ),
+                      p: ({ children }) => {
+
+                      const extractText = (children: React.ReactNode): string => {
+                        if (children === null || children === undefined) return '';
+
+                        if (typeof children === 'string' || typeof children === 'number') {
+                          return String(children);
+                        }
+
+                        if (Array.isArray(children)) {
+                          return children.map(extractText).join('');
+                        }
+
+                        if (React.isValidElement(children)) {
+                          // TypeScript-safe access ke props.children
+                          return extractText((children.props as { children?: React.ReactNode }).children);
+                        }
+
+                        return '';
+                      };
+
+                        const textContent = extractText(children);
+
+                        console.log('🔍 Processing paragraph:', textContent);
+                        console.log('🔍 Available references:', msg.references);
+
+                        if (!msg.references) return <Text size="sm" mb="xs">{children}</Text>;
+
+                        const dedupedReferences = Array.from(
+                          new Map(msg.references.map((ref) => [`${ref.url}-${ref.ref_mark}`, ref])).values()
+                        );
+
+                        const sortedReferences = dedupedReferences.sort((a, b) => (a.index ?? 999) - (b.index ?? 999));
+                        
+                        const processedContent = processTextWithReferences(textContent, sortedReferences);
+
+                        return <Text size="sm" mb="xs">{processedContent}</Text>;
+                      },
                       h1: ({children}) => (
                         <Text size="xl" fw={700} mb="md">{children}</Text>
                       ),
@@ -482,8 +967,40 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
                       }}
                     >
                       {msg.text}
-
                   </ReactMarkdown>
+
+                  {/* Daftar Referensi */}
+                  {(msg.references?.length ?? 0) > 0 && (
+                    <Box mt="sm" p="xs" style={{ 
+                      backgroundColor: isDark ? theme.colors.dark[7] : theme.colors.gray[1],
+                      borderRadius: theme.radius.sm
+                    }}>
+                      <Text size="xs" c="dimmed">Referensi:</Text>
+                      <Stack gap={4} mt={4}>
+                         {Array.from(
+                          new Map(
+                            msg.references?.map((ref) => [`${ref.url}-${ref.ref_mark}`, ref])
+                          ).values()
+                        ).map((ref, idx) => (
+                          <Group key={`${ref.url}-${ref.ref_mark}`} gap={4} align="flex-start">
+                            <Text size="xs">{ref.ref_mark}</Text>
+                            <Anchor 
+                              href='#'
+                              // target="_blank" 
+                              size="xs"
+                              style={{ wordBreak: 'break-all' }}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handlerOpenPdf(ref.url);
+                              }}
+                            >
+                              {ref.text}
+                            </Anchor>
+                          </Group>
+                        ))}
+                      </Stack>
+                    </Box>
+                  )}
                 </TypographyStylesProvider>
               )}
             </Paper>
@@ -526,13 +1043,32 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
         style={{ 
           flexShrink: 0,
           borderTop: '1px solid #e9ecef',
-          backgroundClip: 'var(--mantine-color-body)',  
+          backgroundClip: 'var(--mantine-color-body)',
+          //for suggestionpanel2
+          position: 'relative'  
         }}>
+        {/* <Button
+          onClick={fetchInitialSuggestions}
+          size='xs'
+          variant='light'
+          disabled={isLoading}
+        >
+          Ganti Saran
+        </Button>
+          {showSuggestions && suggestions.length > 0 && (
+        <SuggestionPanel
+          suggestions={suggestions}
+          context={suggestionContext}
+          onSuggestionClick={handleSuggestionClick}
+          onClose={handleCloseSuggestions}
+        />
+      )} */}
+
         <Group mt="xs" gap="sm" align="flex-end">
           <Textarea
             placeholder={isLoading ? "Menunggu Respon AI" : "Ketik pertanyaan..."}
             autosize
-            minRows={3}
+            minRows={1}
             maxRows={4}
             value={input}
             onChange={(e) => setInput(e.currentTarget.value)}
@@ -544,14 +1080,28 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
               }
             }}
           />
-          <ActionIcon 
+          {/* <ActionIcon 
             variant={uploading ? 'filled' : 'default'} 
             loading={uploading} 
             disabled={uploading} 
             size='lg'
             onClick={handleUploadFile}>
             <IconUpload size={20} />
-          </ActionIcon>
+          </ActionIcon> */}
+            <Tooltip label={forceWeb ? "Pencarian web aktif" : "Pencarian web nonaktif"} position="top" withArrow>
+              <Switch
+                size="lg"
+                checked={forceWeb}
+                onChange={(event) => setForceWeb(event.currentTarget.checked)}
+                thumbIcon={
+                  forceWeb ? (
+                    <IconSearch size="0.8rem" color={theme.colors.blue[6]} stroke={3} />
+                  ) : (
+                    <IconWorld size="0.8rem" color={theme.colors.gray[6]} stroke={2} />
+                  )
+                }
+              />
+            </Tooltip>
           <Button onClick={handleSend} disabled={!input.trim()} variant='filled'>Kirim</Button>
         </Group>
 
@@ -562,7 +1112,76 @@ export default function ChatPanel({ selectedNode, selectedEdge, sessionId }: Cha
           onChange={onFileChange}
           accept='application/pdf'  
         />
+      {/* Suggestion Panel sebagai overlay */}
+      {showSuggestions && suggestions.length > 0 && (
+        <ImprovedSuggestionPanel
+          suggestions={suggestions}
+          context={suggestionContext}
+          onSuggestionClick={handleSuggestionClick}
+          onClose={handleCloseSuggestions}
+          onRefreshSuggestions={fetchInitialSuggestions}
+        />
+      )}
       </Box>
+      <Modal
+          opened={modalOpened}
+          onClose={() => {
+              setModalOpened(false);
+              setSelectedPDF(null);
+          }}
+          title="Lihat Artikel"
+          size="90%"
+          padding="sm"
+          centered
+          overlayProps={{ blur: 3 }}
+          styles={{
+              content: {
+              height: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: 0,
+              position: 'relative', 
+              },
+              body: {
+              flex: 1,
+              overflow: 'hidden',
+              padding: 0,
+              position: 'relative', 
+              },
+          }}
+          >
+          {selectedPDF && (
+              <div style={{ height: '100%', position: 'relative' }}>
+              <WebViewer fileUrl={selectedPDF} onAnalytics={handleAnalytics} />
+              </div>
+          )}
+      </Modal>
+
+            {/* Enhanced Modals */}
+      <Modal
+        opened={!!detailModalNode}
+        onClose={() => {
+          setDetailModalNode(null);
+        }}
+        title={
+          <Group gap="sm">
+            <ThemeIcon variant="light" color="blue" size="md">
+              <IconCircleDot size={16} />
+            </ThemeIcon>
+            <Box>
+              <Text fw={600}>{detailModalNode?.title || 'Detail Artikel'}</Text>
+              <Text size="xs" c="dimmed">Informasi lengkap artikel</Text>
+            </Box>
+          </Group>
+        }
+        size="75vw"
+        radius="lg"
+        shadow="xl"
+      >
+        <NodeDetail node={detailModalNode} onClose={() => {
+          setDetailModalNode(null);
+        }} />
+      </Modal>
     </Box>
   );
 }

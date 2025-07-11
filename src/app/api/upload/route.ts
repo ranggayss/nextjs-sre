@@ -116,6 +116,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         // Analisis dengan AI => object dengan properti att_*
         const aiSections = await analyzeWithAI(extractedText);
 
+
         const firstNode: ExtendedNode = aiSections[0] ?? {
           label: "Ringkasan",
           type: "article",
@@ -157,17 +158,44 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           },
         });
 
-        /*
-        await fetch("http://localhost:8000/ingest", {
+        //this for mainpy(fastapi)
+        
+        // await fetch(`${process.env.PY_URL}/api/process-pdf`, {
+        //   method: "POST",
+        //   headers: {
+        //     "Content-Type": "application/json",
+        //   },
+        //   body: JSON.stringify({
+        //     pdf_url: `${publicUrl}`,
+        //     session_id: sessionId,
+        //     node_id: node.id,
+        //     metadata: {
+        //       title: title,
+        //     }
+        //   })
+        // });
+        
+
+        //this for mcp_server
+        await fetch(`${process.env.PY_URL}/mcp`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            pdf_url: `${process.env.BASE_URL}${publicUrl}`
+            jsonrpc: "2.0",
+            method: "tools/call",
+            params: {
+              name: "process_pdf",
+              arguments: {
+                pdf_url: publicUrl,
+                session_id: sessionId,
+                node_id: node.id,
+                metadata: { title }
+              }
+            },
+            id: 1
           })
         });
-        */
+        
 
         // Panggil API generate edges (external route)
         const edgeRes = await fetch(`${process.env.BASE_URL}/api/generate-edges`, {
@@ -179,6 +207,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         if (!edgeRes.ok) throw new Error("Failed to generate edges");
         const edgeData = await edgeRes.json();
 
+        /*
         await fetch(`${process.env.BASE_URL}/api/neo4j/sync-node`, {
           method: 'POST',
           headers: {
@@ -209,6 +238,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             sessionId,
           })
         });
+        */
 
         resolve(
           NextResponse.json({

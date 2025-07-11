@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }>}) {
   try {
+    const {id} = await params;
     const project = await prisma.brainstormingSession.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
-        articles: true,
+        articles: {
+          include: {
+            nodes: true,
+            edges: true,
+          }
+        },
         chatMessages: true,
       },
     });
@@ -22,11 +28,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const {id} = await params;
     const body = await req.json();
     const updated = await prisma.brainstormingSession.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         title: body.title,
         description: body.description,
@@ -41,10 +48,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, context : { params: { id: string } }) {
+export async function DELETE(req: NextRequest, {params } : { params: Promise<{ id: string }> }) {
   try {
     // Validasi: pastikan tidak ada artikel/chat terkait
-    const {id} = context.params;
+    const {id} = await params;
     const project = await prisma.brainstormingSession.findUnique({
       where: { id },
       include: {
@@ -80,13 +87,13 @@ export async function DELETE(req: NextRequest, context : { params: { id: string 
 }
 
 // src/app/api/sessions/[id]/route.ts
-export async function PATCH(req: NextRequest, context : { params: { id: string } }) {
-  const sessionId = context.params.id;
+export async function PATCH(req: NextRequest, context : { params: Promise<{ id: string }>}) {
+  const {id} = await context.params;
   const body = await req.json();
 
   try {
     const updatedSession = await prisma.brainstormingSession.update({
-      where: { id: sessionId },
+      where: { id },
       data: {
         selectedFilterArticles: body.selectedFilterArticles,
         graphFilters: body.graphFilters,
