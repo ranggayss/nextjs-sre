@@ -34,6 +34,8 @@ import {
   useMantineTheme,
   Loader,
   Select,
+  TextInput,
+  Textarea,
 } from '@mantine/core';
 import { 
   IconNetwork, 
@@ -57,6 +59,7 @@ import {
   IconMenu,
   IconEye,
   IconUpload,
+  IconChevronLeft,
 } from '@tabler/icons-react';
 import { ExtendedEdge, ExtendedNode } from '../../../types';
 import NetworkGraph from '../../../components/NetworkGraph';
@@ -169,6 +172,17 @@ export default function Home() {
 
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [previousGraph, setPreviousGraph] = useState<'visjs' | 'neovisjs'>('visjs');
+  const [uploadModalOpened, setUploadModalOpened] = useState(false);
+  const [uploadForm, setUploadForm] = useState({
+    title: '',
+    author: '',
+    year: '',
+    abstract: '',
+    keywords: '',
+    doi: '',
+    category: '',
+  });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const fetchNeo4jData = async () => {
     try {
@@ -672,19 +686,16 @@ export default function Home() {
     setDetailModalEdge(edge);
   }, []);
 
-  const chatHistory = [
-    { id: 1, title: 'Analisis Machine Learning', timestamp: '2 jam lalu', active: false },
-    { id: 2, title: 'Penelitian Deep Learning', timestamp: '1 hari lalu', active: false },
-    { id: 3, title: 'Computer Vision Study', timestamp: '3 hari lalu', active: true },
-  ];
-
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUpLoading] = useState(false);
 
   const handleUploadFile = () => {
-    fileInputRef.current?.click();
+    // fileInputRef.current?.click();
+    setUploadModalOpened(true);
   };
   
+  //THE USUALLLLLL
+  /*
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -694,6 +705,7 @@ export default function Home() {
         title: 'Format tidak didukung',
         message: 'Mohon upload file PDF',
         color: 'yellow',
+        position: 'top-right',
       });
       return;
     }
@@ -729,6 +741,7 @@ export default function Home() {
         title: 'Berhasil',
         message: `File "${file.name}" berhasil diunggah dan diproses`,
         color: 'green',
+        position: 'top-right',
       });
 
       //PERBAIKAN: Refresh data setelah upload
@@ -739,6 +752,7 @@ export default function Home() {
         title: 'Upload Gagal',
         message: error.message || 'Terjadi Kesalahan saat upload',
         color: 'red',
+        position: 'top-right',
       });
       console.error('File upload error:', error);
     } finally{
@@ -746,6 +760,115 @@ export default function Home() {
       e.target.value = ''
     }
   };
+  */
+
+  const onFileChangeInModal = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.pdf')){
+      notifications.show({
+        title: 'Format tidak didukung',
+        message: 'Mohon upload file PDF',
+        color: 'yellow',
+        position: 'top-right',
+      });
+      return;
+    }
+
+    // Set file dan auto-fill title jika kosong
+    setSelectedFile(file);
+    if (!uploadForm.title) {
+      setUploadForm({
+        ...uploadForm,
+        title: file.name.replace('.pdf', '')
+      });
+    }
+    
+    // Clear input
+    e.target.value = '';
+  };
+
+  const handleUploadSubmit = async () => {
+    if (!selectedFile) return;
+
+    // TETAP KIRIM DATA SEPERTI KODE LAMA (hanya file, title, sessionId)
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('title', selectedFile.name); // Gunakan nama file, bukan form title
+    formData.append('sessionId', sessionId as string);
+
+    setUpLoading(true);
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const contentType = res.headers.get("content-type");
+      if (!res.ok){
+        const text = await res.text();
+        throw new Error(`Upload failed: ${text}`);
+      };
+
+      let data: any = {};
+      if (contentType?.includes("application/json")){
+        data = await res.json();
+        console.log('File uploaded:', data);
+      }else{
+        const text = await res.text();
+        console.log('Unexpected response:', text);
+      }
+
+      notifications.show({
+        title: 'Berhasil',
+        message: `File "${selectedFile.name}" berhasil diunggah dan diproses`,
+        color: 'green',
+        position: 'top-right',
+      });
+
+      // Reset form dan tutup modal
+      setUploadModalOpened(false);
+      setSelectedFile(null);
+      setUploadForm({
+        title: '',
+        author: '',
+        year: '',
+        abstract: '',
+        keywords: '',
+        doi: '',
+        category: ''
+      });
+
+      // Refresh data setelah upload
+      await fetchData();
+
+    } catch (error: any) {
+      notifications.show({
+        title: 'Upload Gagal',
+        message: error.message || 'Terjadi Kesalahan saat upload',
+        color: 'red',
+        position: 'top-right',
+      });
+      console.error('File upload error:', error);
+    } finally{
+      setUpLoading(false);
+    }
+  };
+
+  const handleModalClose = () => {
+    setUploadModalOpened(false);
+    setSelectedFile(null);
+    setUploadForm({
+      title: '',
+      author: '',
+      year: '',
+      abstract: '',
+      keywords: '',
+      doi: '',
+      category: ''
+    });
+  };  
 
   //PERBAIKAN: Loading state yang lebih informatif
   if (!mounted || isLoadingSession || isLoadingData) {
@@ -812,13 +935,13 @@ export default function Home() {
                 </Group>
 
                 <Group gap="sm">
-                  <input
+                  {/* <input
                         ref={fileInputRef}
                         type="file"
                         style={{ display: 'none'}}
                         onChange={onFileChange}
                         accept="application/pdf"
-                  />
+                  /> */}
                   <Button
                     variant="light"
                     color="green"
@@ -1094,7 +1217,7 @@ export default function Home() {
         }} />
       </Modal>
       
-      {uploading && (
+      {/* {uploading && (
         <div
           style={{
             position: 'fixed',
@@ -1112,7 +1235,147 @@ export default function Home() {
             <Text size="sm">Mengunggah file...</Text>
           </Group>
         </div>
+      )} */}
+      {uploading && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              background: 'white',
+              padding: '2rem',
+              borderRadius: '12px',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+              textAlign: 'center',
+            }}
+          >
+            <Stack align="center" gap="md">
+              <Loader size="lg" />
+              <Text size="lg" fw={500}>Mengunggah file...</Text>
+              <Text size="sm" c="dimmed">Mohon tunggu sebentar</Text>
+            </Stack>
+          </div>
+        </div>
       )}
+      {/* Upload Modal */}
+      <Modal
+        opened={uploadModalOpened}
+        onClose={handleModalClose}
+        title="Upload Artikel PDF"
+        size="lg"
+        centered
+      >
+        <Stack gap="md">
+          <div>
+            <input
+              type="file"
+              style={{ display: 'none'}}
+              ref={fileInputRef}
+              onChange={onFileChangeInModal}
+              accept="application/pdf"
+            />
+            <Button
+              variant="light"
+              color="blue"
+              leftSection={<IconUpload size={16} />}
+              onClick={() => fileInputRef.current?.click()}
+              fullWidth
+            >
+              {selectedFile ? `File: ${selectedFile.name}` : 'Pilih File PDF'}
+            </Button>
+          </div>
+          <TextInput
+            label="Judul Artikel"
+            placeholder="Masukkan judul artikel"
+            value={uploadForm.title}
+            onChange={(e) => setUploadForm({...uploadForm, title: e.target.value})}
+            required
+          />
+          
+          <TextInput
+            label="Penulis"
+            placeholder="Masukkan nama penulis"
+            value={uploadForm.author}
+            onChange={(e) => setUploadForm({...uploadForm, author: e.target.value})}
+            required
+          />
+          
+          <TextInput
+            label="Tahun"
+            placeholder="Masukkan tahun publikasi"
+            value={uploadForm.year}
+            onChange={(e) => setUploadForm({...uploadForm, year: e.target.value})}
+            required
+          />
+          
+          <Textarea
+            label="Abstrak"
+            placeholder="Masukkan abstrak artikel"
+            value={uploadForm.abstract}
+            onChange={(e) => setUploadForm({...uploadForm, abstract: e.target.value})}
+            minRows={4}
+            required
+          />
+          
+          <TextInput
+            label="Kata Kunci"
+            placeholder="Masukkan kata kunci (pisahkan dengan koma)"
+            value={uploadForm.keywords}
+            onChange={(e) => setUploadForm({...uploadForm, keywords: e.target.value})}
+          />
+          
+          <TextInput
+            label="DOI"
+            placeholder="Masukkan DOI artikel"
+            value={uploadForm.doi}
+            onChange={(e) => setUploadForm({...uploadForm, doi: e.target.value})}
+          />
+          
+          <Select
+            label="Kategori"
+            placeholder="Pilih kategori artikel"
+            value={uploadForm.category}
+            onChange={(value) => setUploadForm({...uploadForm, category: value || ''})}
+            data={[
+              { value: 'research', label: 'Penelitian' },
+              { value: 'review', label: 'Review' },
+              { value: 'case-study', label: 'Studi Kasus' },
+              { value: 'theory', label: 'Teori' },
+              { value: 'methodology', label: 'Metodologi' }
+            ]}
+          />
+          
+          {selectedFile && (
+            <Text size="sm" c="dimmed">
+              File: {selectedFile.name}
+            </Text>
+          )}
+          
+          <Group justify="flex-end" mt="md">
+            <Button variant="light" onClick={handleModalClose}>
+              Batal
+            </Button>
+            <Button 
+              onClick={handleUploadSubmit} 
+              loading={uploading}
+              disabled={!selectedFile}
+            >
+              Upload
+            </Button>
+            </Group>
+        </Stack>
+      </Modal>
     </DashboardLayout>
   );
 }
