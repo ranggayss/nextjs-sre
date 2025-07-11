@@ -39,6 +39,7 @@ export default function Article(){
 
     const {colorScheme} = useMantineColorScheme();
     const theme = useMantineTheme();
+    const isDark = colorScheme === 'dark';
 
     const [sidebarOpened, setSidebarOpened] = useState(false);
     const [mounted, setMounted] = useState(false);
@@ -105,12 +106,6 @@ export default function Article(){
         }
     }, [showHistory]);
 
-    const chatHistory = [
-        { id: 1, title: 'Analisis Machine Learning', timestamp: '2 jam lalu', active: false },
-        { id: 2, title: 'Penelitian Deep Learning', timestamp: '1 hari lalu', active: false },
-        { id: 3, title: 'Computer Vision Study', timestamp: '3 hari lalu', active: true },
-    ];
-
     const handleChatSelect = useCallback((chatId : number) => {
         console.log('Selected Chat');
     }, []);
@@ -138,9 +133,9 @@ export default function Article(){
                         Apakah Anda yakin ingin menghapus artikel berikut?
                     </Text>
                     <Box p="md" style={{
-                        backgroundColor: theme.colors.gray[0],
+                        backgroundColor: isDark ? theme.colors.dark[5] : theme.colors.gray[0],
                         borderRadius: theme.radius.md,
-                        border: `1px solid ${theme.colors.red[2]}`
+                        border: `1px solid ${isDark ? theme.colors.red[8] : theme.colors.red[2]}`,
                     }}>
                         <Text fw={600} size="sm" mb="xs">{title}</Text>
                         <Text size="xs" c="dimmed">ID: {title}</Text>
@@ -309,9 +304,9 @@ export default function Article(){
                         Apakah Anda yakin ingin menghapus annotation berikut?
                     </Text>
                     <Box p="md" style={{
-                        backgroundColor: theme.colors.gray[0],
+                        backgroundColor: isDark ? theme.colors.dark[5] : theme.colors.gray[0],
                         borderRadius: theme.radius.md,
-                        border: `1px solid ${theme.colors.red[2]}`
+                        border: `1px solid ${isDark ? theme.colors.red[8] : theme.colors.red[2]}`,
                     }}>
                         <Text fw={600} size="sm" mb="xs">{highlightedText}</Text>
                         <Text size="xs" c="dimmed">ID: {id}</Text>
