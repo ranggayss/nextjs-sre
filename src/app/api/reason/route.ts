@@ -15,8 +15,8 @@ export async function POST(request: Request) {
     
     // Inisialisasi dengan strategy yang lebih specific
     let strategy = "hybrid";
-    let confidence = 0.8;
-    const context_sources = ["vector_db"];
+    let confidence = 0.7;
+    const context_sources: string[] = ["vector_db"];
     const reasoning_chain = [
       `Processing input: ${input.substring(0, 30)}...`,
       "Initialized reasoning flow"
@@ -44,17 +44,17 @@ export async function POST(request: Request) {
           // Analisis konten nodes untuk menentukan strategy
           const hasTechnicalMethods = nodes.some(n => 
             n.att_method && (
-              n.att_method.toLowerCase().includes("experiment") ||
-              n.att_method.toLowerCase().includes("methodology") ||
-              n.att_method.toLowerCase().includes("analysis")
+              n.att_method.toLowerCase().includes("eksperimen") ||
+              n.att_method.toLowerCase().includes("metodologi") ||
+              n.att_method.toLowerCase().includes("analisis")
             )
           )
           
           const hasTheory = nodes.some(n => 
             n.att_background && (
-              n.att_background.toLowerCase().includes("theory") ||
+              n.att_background.toLowerCase().includes("teori") ||
               n.att_background.toLowerCase().includes("framework") ||
-              n.att_background.toLowerCase().includes("concept")
+              n.att_background.toLowerCase().includes("konsep")
             )
           )
 
@@ -95,32 +95,50 @@ export async function POST(request: Request) {
     // Override jika force_web aktif
     if (force_web) {
       strategy = "web_enhanced"
-      context_sources.push("web_search")
+      if (!context_sources.includes("web_search")){
+        context_sources.push("web_search");
+      }
+      // context_sources.push("web_search")
       reasoning_chain.push("Force enabled web search")
       confidence = Math.min(confidence + 0.1, 1.0)
-    }
+    } else {
 
-    // Jika tidak ada context khusus, gunakan hybrid
-    if (!external_context?.node_ids && !force_web) {
-      strategy = "hybrid"
-      context_sources.push("web_search")
-      reasoning_chain.push("Using hybrid approach (RAG + Web)")
-    }
-
-    const result = {
-      strategy,
-      confidence,
-      context_sources,
-      reasoning_chain,
-      metadata: {
-        node_count: external_context?.node_ids?.length || 0,
-        edge_count: external_context?.edge_ids?.length || 0,
-        force_web
+      // Jika tidak ada context khusus, gunakan hybrid
+      //jika km masih mau menggunakan hybrid (jadi bisa rag + web)
+      if (!external_context?.node_ids || external_context.node_ids.length === 0) {
+        strategy = "hybrid"
+        if (!context_sources.includes("web_search")){
+          context_sources.push("web_search")
+        }
+        reasoning_chain.push("Using hybrid approach (RAG + Web)")
       }
-    }
 
-    console.log('Reasoning result:', result)
-    return NextResponse.json(result)
+      //jika kamu tidak mau hybrid jadi rag_only
+      // if (!external_context?.node_ids || external_context.node_ids.length === 0){
+      //   strategy = "rag_only"
+      //   const index = context_sources.indexOf("web_search");
+      //   if (index > -1){
+      //     context_sources.splice(index, 1);
+      //   }
+      //   reasoning_chain.push("Using RAG-only approach (no web search)")
+      //   confidence = 0.6
+      // }
+  
+      const result = {
+        strategy,
+        confidence,
+        context_sources,
+        reasoning_chain,
+        metadata: {
+          node_count: external_context?.node_ids?.length || 0,
+          edge_count: external_context?.edge_ids?.length || 0,
+          force_web
+        }
+      }
+  
+      console.log('Reasoning result:', result)
+      return NextResponse.json(result)
+    }
 
   } catch (error: any) {
     console.error('Reasoning error:', error)
