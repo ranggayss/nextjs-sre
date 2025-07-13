@@ -81,6 +81,7 @@ model User {
   articles             Article[]
   brainstormingSession BrainstormingSession[]
   drafts               Draft[]
+  writerSessions       WriterSession[]
 }
 
 model Draft {
@@ -88,6 +89,8 @@ model Draft {
   userId    String?
   title     String
   createdAt DateTime       @default(now())
+  writerId  String?
+  writerSession  WriterSession?  @relation(fields: [writerId], references: [id], onDelete: Cascade)
   user      User?          @relation(fields: [userId], references: [id])
   sections  DraftSection[]
 }
@@ -160,4 +163,27 @@ model documents {
 enum Role {
   USER
   ADMIN
+}
+
+model WriterSession {
+  id                     String        @id @default(uuid())
+  title                  String
+  description            String?
+  userId                 String
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  lastActivity           DateTime      @default(now())
+  coverColor             String        @default("#4c6ef5")
+  drafts                 Draft[]
+  user                   User          @relation(fields: [userId], references: [id])
+}
+
+model Document {
+  id        String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  content   String
+  metadata  Json                       @default("{}")
+  embedding Unsupported("vector(768)")? // Keep original vector type
+  createdAt DateTime                   @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("documents")
 }
