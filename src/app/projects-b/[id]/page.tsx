@@ -37,10 +37,18 @@ import {
    IconSend,
    IconFilePlus, 
    IconUpload,
+   IconFileText,
+   IconChevronRight,
+   IconSearch,
+   IconRefresh,
+   IconPlus,
+   IconExternalLink,
+   IconMessageCircle,
+   IconStar,
   } from "@tabler/icons-react";
-import classes from '../container.module.css';
-import myimage from '../imageCollection/LogoSRE_Fix.png';
-import knowledgeImage from '../imageCollection/graph.png';
+import classes from '../../../container.module.css';
+import myimage from '../../../imageCollection/LogoSRE_Fix.png';
+import knowledgeImage from '../../../imageCollection/graph.png';
 import { useState, useEffect } from 'react';
 
 import { RichTextEditor, Link } from '@mantine/tiptap';
@@ -54,9 +62,21 @@ import SubScript from '@tiptap/extension-subscript';
 import { Heading } from '@tiptap/extension-heading';
 import { Plugin } from 'prosemirror-state';
 import Split from 'react-split';
+import { useParams, useRouter } from 'next/navigation';
+
+interface Article {
+    id: string,
+    title: string,
+    att_background: string,
+    att_url: string,
+}
+
 
 export default function Home() {
   const [navbarOpened, { toggle: toggleNavbar, close: closeNavbar }] = useDisclosure();
+  const {id: sessionId} = useParams();
+  const router = useRouter();
+  
   const { colorScheme, setColorScheme } = useMantineColorScheme();
   const computedColorScheme = useComputedColorScheme("light", {
     getInitialValueInEffect: true,
@@ -72,6 +92,10 @@ export default function Home() {
   const [fileName, setFileName] = useState("Judul Artikel 1");
 
   const [headings, setHeadings] = useState<Array<{ id: string; text: string }>>([]);
+
+  //for article
+  const [article, setArticle] = useState<Article[]>([]);
+  const [mounted, setMounted] = useState(false);
 
   const HeadingWithId = Heading.extend({
     addAttributes() {
@@ -160,6 +184,18 @@ export default function Home() {
     setMessages((prev) => [...prev, chatInput]);
     setChatInput("");
   };
+
+    const getArticle = async () => {
+        const res = await fetch(`/api/nodes?sessionId=${sessionId}`);
+        const article = await res.json();
+
+        setArticle(article);
+    };
+
+    useEffect(() => {
+        getArticle();
+        setMounted(true);
+    }, []);
 
   return (
     <AppShell
@@ -516,8 +552,7 @@ export default function Home() {
                 />
 
                 {activeTab === "knowledge" && (
-                  <Box style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                    <ScrollArea style={{ flex: 1 }} scrollbarSize={8}>
+                  <>
                     <Box
                       style={{
                         border: "1px solid #ddd",
@@ -527,12 +562,9 @@ export default function Home() {
                         display: "flex",
                         justifyContent: "center",
                         alignItems: "center",
-                        overflow: "hidden",
-                        flexDirection: "column",
                         backgroundColor: computedColorScheme === "dark" ? "#1e1e1e" : "#FFFFFF",
                       }}
                     >
-
                       <Image
                         component={NextImage}
                         src={knowledgeImage}
@@ -594,103 +626,156 @@ export default function Home() {
                     >
                       Lihat Graph
                     </Button>
-                    </ScrollArea>
-                  </Box>
+                  </>
                 )}
 
                 {activeTab === "chat" && (
-                  <>
-                    {/* Header Chat dengan ikon */}
-                    <Group align="center" mb="xs" gap="sm">
-                      <Box
-                        style={{
-                          backgroundColor: "#007BFF",
-                          padding: "8px",
-                          borderRadius: "12px", // Sudut tumpul
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <IconMessageCircle2 size={18} color="#fff" />
-                      </Box>
-
-                      <Box>
-                        <Title order={4} style={{ margin: 0, color: "#007BFF", fontWeight: 700 }}>
-                          Chat SRE
-                        </Title>
-                        <Text size="xs" c="dimmed" mt={-4}>
-                          Diskusi dan Analisis Artikel
-                        </Text>
-                      </Box>
-                    </Group>
-
-                    {/* Area chat */}
-                    <ScrollArea style={{
-                      flex: 1,
-                      border: "1px solid #ccc",
-                      borderRadius: "8px",
-                      padding: "8px",
-                      marginBottom: "12px",
-                      backgroundColor: computedColorScheme === "dark" ? "#1e1e1e" : "#fff",
-                      minHeight: "200px",
-                      overflow: "auto"
-                    }}>
-                      {messages.length === 0 ? (
-                        <Text size="xs" c="dimmed" ta="center">
-                          Belum ada percakapan...
-                        </Text>
-                      ) : (
-                        <Stack gap="xs">
-                          {messages.map((msg, i) => (
-                            <Box
-                              key={i}
-                              p="xs"
-                              style={{
-                                backgroundColor: i % 2 === 0 ? "#007BFF" : "#007BFF",
-                                borderRadius: "8px",
-                              }}
-                            >
-                              <Text size="sm">{msg}</Text>
-                            </Box>
-                          ))}
-                        </Stack>
-                      )}
-                    </ScrollArea>
-
-                    {/* Input chat */}
-                    <Box
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        border: "1px solid #ccc",
-                        borderRadius: "8px",
-                        padding: "6px 12px",
-                        backgroundColor: computedColorScheme === "dark" ? "#1e1e1e" : "#fff",
-                      }}
-                    >
-                      <TextInput
-                        placeholder="Tuliskan Pertanyaanmu"
-                        variant="unstyled"
-                        style={{ flex: 1 }}
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.currentTarget.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") sendMessage();
-                        }}
-                      />
-                      <ActionIcon
+                <>
+                    {/* Header dengan Search */}
+                    <Box mb="md">
+                    <TextInput
+                        placeholder="Search sources..."
                         variant="filled"
-                        color="#007BFF"
-                        radius="xl"
-                        size="lg"
-                        onClick={sendMessage}
-                      >
-                        <IconSend size={20} />
-                      </ActionIcon>
+                        leftSection={<IconSearch size={16} />}
+                        rightSection={
+                        <ActionIcon variant="subtle" size="sm">
+                            {/* <IconAdjustments size={16} /> */}
+                        </ActionIcon>
+                        }
+                        style={{
+                        backgroundColor: computedColorScheme === "dark" ? "#2a2a2a" : "#f8f9fa",
+                        }}
+                        onChange={(e) => {
+                        // Handle search functionality
+                        console.log("Search:", e.currentTarget.value);
+                        }}
+                    />
                     </Box>
-                  </>
+
+                    {/* Area Article List */}
+                    <ScrollArea style={{
+                    flex: 1,
+                    minHeight: "400px",
+                    overflow: "auto"
+                    }}>
+                    {article.length === 0 ? (
+                        <Box ta="center" py="xl">
+                        <Text size="sm" c="dimmed">
+                            No sources found
+                        </Text>
+                        </Box>
+                    ) : (
+                        <Stack gap="md">
+                        {article.map((item, i) => (
+                            <Box
+                            key={item.id}
+                            p="md"
+                            style={{
+                                backgroundColor: computedColorScheme === "dark" ? "#1a1a1a" : "#ffffff",
+                                borderRadius: "8px",
+                                border: `1px solid ${computedColorScheme === "dark" ? "#333" : "#e9ecef"}`,
+                                cursor: "pointer",
+                                transition: "all 0.2s ease",
+                                "&:hover": {
+                                backgroundColor: computedColorScheme === "dark" ? "#2a2a2a" : "#f8f9fa",
+                                borderColor: computedColorScheme === "dark" ? "#444" : "#dee2e6"
+                                }
+                            }}
+                            onClick={() => {
+                                // Handle article click
+                                console.log("Clicked article:", item);
+                            }}
+                            >
+                            {/* Article Icon and Content */}
+                            <Group gap="sm" align="flex-start">
+                                {/* Document Icon */}
+                                <Box
+                                style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                    marginTop: "2px"
+                                }}
+                                >
+                                <IconFileText 
+                                    size={16} 
+                                    color={computedColorScheme === "dark" ? "#888" : "#6c757d"} 
+                                />
+                                </Box>
+
+                                {/* Article Content */}
+                                <Box style={{ flex: 1, minWidth: 0 }}>
+                                {/* Article Title */}
+                                <Title 
+                                    order={6} 
+                                    style={{ 
+                                    margin: 0, 
+                                    lineHeight: 1.4,
+                                    fontWeight: 600,
+                                    fontSize: "14px",
+                                    color: computedColorScheme === "dark" ? "#fff" : "#212529"
+                                    }}
+                                >
+                                    {item.title}
+                                </Title>
+
+                                {/* Article Description/Background */}
+                                {item.att_background && (
+                                    <Text 
+                                    size="xs" 
+                                    c="dimmed" 
+                                    mt={4}
+                                    style={{
+                                        lineHeight: 1.4,
+                                        fontSize: "12px",
+                                        overflow: "hidden",
+                                        display: "-webkit-box",
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: "vertical"
+                                    }}
+                                    >
+                                    {item.att_background}
+                                    </Text>
+                                )}
+                                
+                                {/* Article Metadata */}
+                                <Text 
+                                    size="xs" 
+                                    c="dimmed" 
+                                    mt={2}
+                                    style={{
+                                    lineHeight: 1.3,
+                                    fontSize: "12px"
+                                    }}
+                                >
+                                    ID: {item.id}
+                                </Text>
+
+                                </Box>
+
+                                {/* Star/Favorite Icon */}
+                                <ActionIcon
+                                variant="subtle"
+                                size="sm"
+                                color="yellow"
+                                style={{ flexShrink: 0 }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    console.log("Star article:", item);
+                                }}
+                                >
+                                <IconStar size={16} />
+                                </ActionIcon>
+                            </Group>
+                            </Box>
+                        ))}
+                        </Stack>
+                    )}
+                    </ScrollArea>
+                </>
                 )}
 
                 {activeTab === "ask" && (

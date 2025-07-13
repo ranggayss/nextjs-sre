@@ -139,11 +139,22 @@ model ChatMessage {
   sessionId      String
   content        String
   role           String
-  references     Json?
   createdAt      DateTime             @default(now())
   contextEdgeIds String[]             @default([])
   contextNodeIds String[]             @default([])
+  references     Json?
   session        BrainstormingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model documents {
+  id         String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  content    String
+  metadata   Json?                  @default("{}")
+  embedding  Unsupported("vector")?
+  created_at DateTime?              @default(now()) @db.Timestamptz(6)
+
+  @@index([embedding])
 }
 
 enum Role {
