@@ -69,7 +69,7 @@ interface Article {
     title: string,
     att_background: string,
     att_url: string,
-}
+};
 
 
 export default function Home() {
@@ -78,24 +78,25 @@ export default function Home() {
   const router = useRouter();
   
   const { colorScheme, setColorScheme } = useMantineColorScheme();
-  const computedColorScheme = useComputedColorScheme("light", {
+  const computedColorScheme = useComputedColorScheme('light', {
     getInitialValueInEffect: true,
   });
 
-  const toggleColorScheme = () =>
-    setColorScheme(computedColorScheme === "dark" ? "light" : "dark");
-
   const [activeTab, setActiveTab] = useState("knowledge");
-
-  const isMobile = useMediaQuery('(max-width: 768px)');
-
   const [fileName, setFileName] = useState("Judul Artikel 1");
-
   const [headings, setHeadings] = useState<Array<{ id: string; text: string }>>([]);
-
-  //for article
   const [article, setArticle] = useState<Article[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [messages, setMessages] = useState<string[]>([]);
+
+  // Media query dengan fallback untuk SSR
+  const isMobile = useMediaQuery('(max-width: 768px)', true, { getInitialValueInEffect: true });
+
+  // Gunakan computedColorScheme untuk konsistensi
+  const toggleColorScheme = () => {
+    setColorScheme(computedColorScheme === 'dark' ? 'light' : 'dark');
+  };
 
   const HeadingWithId = Heading.extend({
     addAttributes() {
@@ -149,6 +150,8 @@ export default function Home() {
       Highlight,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
     ],
+    immediatelyRender: false,
+    shouldRerenderOnTransaction: false,
   });
 
   useEffect(() => {
@@ -176,26 +179,42 @@ export default function Home() {
     };
   }, [editor]);
 
-  const [chatInput, setChatInput] = useState("");
-  const [messages, setMessages] = useState<string[]>([]);
-
   const sendMessage = () => {
     if (chatInput.trim() === "") return;
     setMessages((prev) => [...prev, chatInput]);
     setChatInput("");
   };
 
-    const getArticle = async () => {
-        const res = await fetch(`/api/nodes?sessionId=${sessionId}`);
-        const article = await res.json();
-
-        setArticle(article);
-    };
+  const getArticle = async () => {
+    try {
+      const res = await fetch(`/api/nodes?sessionId=${sessionId}`);
+      const article = await res.json();
+      setArticle(article);
+    } catch (error) {
+      console.error('Error fetching articles:', error);
+    }
+  };
 
     useEffect(() => {
+    setMounted(true);
+    if (sessionId) {
         getArticle();
-        setMounted(true);
-    }, []);
+    }
+    }, [sessionId]);
+  // Tampilkan loading state saat mounting untuk mencegah hydration mismatch
+  if (!mounted) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: 'var(--mantine-color-body)'
+      }}>
+        <Text>Loading...</Text>
+      </div>
+    );
+  }
 
   return (
     <AppShell
