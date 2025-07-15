@@ -23,6 +23,8 @@ import {
   Skeleton,
   Center,
   rem,
+  useMantineColorScheme,
+  useMantineTheme,
 } from '@mantine/core';
 import {
   IconPlus,
@@ -40,7 +42,10 @@ import {
   IconSearch,
   IconFolderOpen,
   IconFileText,
+  IconSquareRoundedX,
 } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
+import { modals } from '@mantine/modals';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { useRouter } from 'next/navigation';
 import { eventBus } from '@/lib/event-bus';
@@ -75,6 +80,10 @@ export default function ProjectDashboard() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   const [sidebarOpened, setSidebarOpened] = useState(false);
+
+  const {colorScheme} = useMantineColorScheme();
+  const theme = useMantineTheme();
+  const isDark = colorScheme === 'dark';
 
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
@@ -208,17 +217,82 @@ export default function ProjectDashboard() {
         
         setMounted(false);
         setTimeout(() => setMounted(true), 100);
+        notifications.show({
+          title: "Success",
+          message: "Berhasil membuat sesi",
+          color: 'green',
+          position: 'top-right',
+        })
       } else {
+        notifications.show({
+          title: 'Gagal',
+          message: 'Gagal membuat sesi',
+          color: 'red',
+          position: 'top-right',
+        });
+
         throw new Error('Gagal membuat proyek');
       }
     } catch (error) {
       console.error('Error', error);
+      notifications.show({
+          title: 'Gagal',
+          message: 'Gagal membuat sesi',
+          color: 'red',
+          position: 'top-right',
+        });
     }
   };
 
+  const deleteProject = async (id: string, title: string) => {
+        modals.openConfirmModal({
+            title: (
+                <Text size="lg" fw={600} c="red">
+                    🗑️ Konfirmasi Hapus sesi
+                </Text>
+            ),
+            children: (
+                <Box>
+                    <Text size="sm" mb="md">
+                        Apakah Anda yakin ingin menghapus sesi berikut?
+                    </Text>
+                    <Box p="md" style={{
+                        backgroundColor: isDark ? theme.colors.dark[5] : theme.colors.gray[0],
+                        borderRadius: theme.radius.md,
+                        border: `1px solid ${isDark ? theme.colors.red[8] : theme.colors.red[2]}`,
+                    }}>
+                        <Text fw={600} size="sm" mb="xs">{title}</Text>
+                        <Text size="xs" c="dimmed">ID: {id}</Text>
+                    </Box>
+                    <Text size="sm" c="red" fw={500} mt="md">
+                        ⚠️ Tindakan ini tidak dapat dibatalkan!
+                    </Text>
+                </Box>
+            ),
+            labels: {
+                confirm: 'Ya, Hapus Sesi',
+                cancel: 'Batal'
+            },
+            confirmProps: {
+                color: 'red',
+                size: 'md',
+                leftSection: <IconSquareRoundedX size={16} />
+            },
+            cancelProps: {
+                variant: 'outline',
+                size: 'md'
+            },
+            size: 'md',
+            centered: true,
+            onConfirm: async () => {
+                await handleDeleteProject(id);
+            },
+        });
+    };
+
   const handleDeleteProject = async (projectId: string) => {
-    const confirmed = confirm('Apakah kamu yakin ingin menghapus proyek ini?');
-    if (!confirmed) return;
+    // const confirmed = confirm('Apakah kamu yakin ingin menghapus proyek ini?');
+    // if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/brainstorming-sessions/${projectId}`, {
@@ -228,8 +302,20 @@ export default function ProjectDashboard() {
       if (res.ok){
         await fetchProjects();
         eventBus.emit('sessionDeleted', projectId);
+        notifications.show({
+          title: 'Success',
+          message: 'Berhasil hapus sesi',
+          color: 'green',
+          position: 'top-right',
+        });
       } else{
         const err = await res.json();
+        notifications.show({
+          title: 'Gagal',
+          message: 'Gagal hapus sesi',
+          color: 'red',
+          position: 'top-right',
+        });
         throw new Error(err?.error || 'Gagal menghapus proyek');
       }
     } catch (error) {
@@ -254,15 +340,33 @@ export default function ProjectDashboard() {
       });
 
       if (!res.ok) {
+        notifications.show({
+          title: 'Gagal',
+          message: 'Gagal update sesi',
+          color: 'red',
+          position: 'top-right',
+        });
         throw new Error('Gagal menyimpan perubahan');
       }
 
       await fetchProjects();
       eventBus.emit('sessionUpdated', editingProject.id);
       setEditingProject(null);
+      notifications.show({
+          title: 'Success',
+          message: 'Berhasil update sesi',
+          color: 'green',
+          position: 'top-right',
+        });
     } catch (error) {
       console.error('Edit error:', error);
-      alert('Terjadi kesalahan saat menyimpan perubahan.');
+      // alert('Terjadi kesalahan saat menyimpan perubahan.');
+      notifications.show({
+          title: 'Gagal',
+          message: 'Gagal update sesi',
+          color: 'red',
+          position: 'top-right',
+        });
     }
   };
 
@@ -350,7 +454,8 @@ export default function ProjectDashboard() {
                 color="red"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDeleteProject(project.id);
+                  // handleDeleteProject(project.id);
+                  deleteProject(project.id, project.description!);
                 }}
               >
                 Delete
@@ -703,6 +808,20 @@ export default function ProjectDashboard() {
                 ]}
               />
             </Box>
+              {/* TAMBAH PREVIEW WARNA TERPILIH */}
+              <Group mt="xs" gap="xs" align="center">
+                <Text size="xs" c="dimmed">Warna terpilih:</Text>
+                <Box
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 4,
+                    backgroundColor: editingProject.coverColor,
+                    border: '2px solid #e9ecef',
+                  }}
+                />
+                <Text size="xs" c="dimmed">{editingProject.coverColor}</Text>
+              </Group>
 
             <Group justify="flex-end" mt="md">
               <Button
