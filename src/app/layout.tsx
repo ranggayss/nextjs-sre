@@ -9,11 +9,8 @@ import type { ReactNode } from 'react';
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        <ColorSchemeScript defaultColorScheme="light" />
-      </head>
       <body>
-        <MantineProvider defaultColorScheme="light" forceColorScheme="light">
+        <MantineProvider defaultColorScheme="light" theme={{primaryColor: 'blue'}}>
           <ModalsProvider>
             <Notifications />
             {children}
