@@ -36,6 +36,10 @@ import {
   Select,
   TextInput,
   Textarea,
+  Tabs,
+  TabsList,
+  TabsTab,
+  ScrollArea,
 } from '@mantine/core';
 import { 
   IconNetwork, 
@@ -60,6 +64,10 @@ import {
   IconEye,
   IconUpload,
   IconChevronLeft,
+  IconMessage,
+  IconHighlight,
+  IconList,
+  IconChartDots2,
 } from '@tabler/icons-react';
 import { ExtendedEdge, ExtendedNode } from '../../../types';
 import NetworkGraph from '../../../components/NetworkGraph';
@@ -72,6 +80,10 @@ import { notifications } from '@mantine/notifications';
 import dynamic from 'next/dynamic';
 import { resolve } from 'path';
 import Neo2 from '@/components/Neo2';
+import AnnotationPanel from '@/components/AnnotationPanel';
+import ArticleDetailTable from '@/components/ArticleDetailTable';
+import { Cite } from '@citation-js/core';
+import '@citation-js/plugin-ris';
 
 const Neograph = dynamic(() => import('@/components/NeoGraph'), {
     ssr: false,
@@ -139,9 +151,7 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const dark = mounted ? colorScheme === 'dark' : false;
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+ 
 
   const [sidebarOpened, setSidebarOpened] = useState(false);
   const [selectedNode, setSelectedNode] = useState<ExtendedNode | null>(null);
@@ -180,9 +190,233 @@ export default function Home() {
     abstract: '',
     keywords: '',
     doi: '',
-    category: '',
+    // category: '',
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  //for tab
+  const [activeTab, setActiveTab] = useState<'chat' | 'annotation'>('chat');
+
+  //for graph
+  const [viewMode, setViewMode] = useState<'graph' | 'detail'>('graph');
+
+  //for reset
+  const [resetChatContext, setResetChatContext] = useState(false);
+
+  
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUpLoading] = useState(false);
+
+  //for ris
+  const [uploadMode, setUploadMode ] = useState<'choose' | 'with-ris' | 'direct'>('choose');
+  const [risFile, setRisFile] = useState<File | null>(null);
+  const [isProcessingRis, setIsProcessingRis] = useState(false);
+  const risFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const parseRisFile = async (risContent: string) => {
+  try {
+    // Menggunakan citation-js untuk parsing RIS
+    const cite = new Cite(risContent);
+    
+    // Try getting data without format options first
+    let jsonData = cite.format('data');
+    
+    // If it's a string, try parsing it
+    if (typeof jsonData === 'string') {
+      jsonData = JSON.parse(jsonData);
+    }
+    
+    // Ensure it's an array
+    const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+    const data = dataArray[0];
+    
+    if (!data) {
+      throw new Error('Tidak dapat mem-parse file RIS');
+    }
+
+
+    // Mapping dari format citation-js ke format yang dibutuhkan
+    const parsedData = {
+      title: data.title || '',
+      author: data.author ? 
+        data.author.map((author: any) => 
+          `${author.given || ''} ${author.family || ''}`.trim()
+        ).join(', ') : '',
+      year: data.issued ? 
+        data.issued['date-parts']?.[0]?.[0]?.toString() || '' : '',
+      abstract: data.abstract || '',
+      keywords: data.keyword ? 
+        (Array.isArray(data.keyword) ? 
+          data.keyword.join(', ') : 
+          data.keyword) : '',
+      doi: data.DOI || '',
+    };
+
+    return parsedData;
+  } catch (error) {
+    console.error('Error parsing RIS with citation-js:', error);
+    // Fallback ke parsing manual jika citation-js gagal
+    return parseRisFileManual(risContent);
+  }
+};
+
+  const parseRisFileManual = (risContent: string) => {
+    const lines = risContent.split('\n');
+    const parsedData: any = {};
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('TI - ')){
+        parsedData.title = trimmed.substring(6);
+      } else if (trimmed.startsWith('AU - ')){
+        if (!parsedData.author) parsedData.author = trimmed.substring(6);
+        else parsedData.author += `, ${trimmed.substring(6)}`;
+      } else if (trimmed.startsWith('PY - ')){
+        parsedData.year = trimmed.substring(6);
+      } else if (trimmed.startsWith('AB - ')){
+        parsedData.abstract = trimmed.substring(6);
+      } else if (trimmed.startsWith('KW - ')){
+        if (!parsedData.keywords) parsedData.keywords = trimmed.substring(6);
+        else parsedData.keywords += `, ${trimmed.substring(6)}`;
+      } else if (trimmed.startsWith('DO - ')){
+        parsedData.doi = trimmed.substring(6);
+      } else if (trimmed.startsWith('T2 - ') || trimmed.startsWith('JO - ')){
+        parsedData.journal = trimmed.substring(6);
+      }
+    }
+
+    return parsedData;
+  };
+
+  // Function untuk handle RIS file upload
+  const onRisFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.ris')) {
+      notifications.show({
+        title: 'Format tidak didukung',
+        message: 'Mohon upload file RIS',
+        color: 'yellow',
+        position: 'top-right',
+      });
+      return;
+    }
+
+    setRisFile(file);
+    setIsProcessingRis(true);
+
+    try {
+      const content = await file.text();
+      const parsedData = await parseRisFile(content);
+      
+      // Auto-fill form dengan data dari RIS
+      setUploadForm({
+        title: parsedData.title || '',
+        author: parsedData.author || '',
+        year: parsedData.year || '',
+        abstract: parsedData.abstract || '',
+        keywords: parsedData.keywords || '',
+        doi: parsedData.doi || '',
+        // category: ''
+      });
+
+      notifications.show({
+        title: 'RIS berhasil diproses',
+        message: 'Data artikel telah diisi otomatis',
+        color: 'green',
+        position: 'top-right',
+      });
+    } catch (error) {
+      notifications.show({
+        title: 'Error parsing RIS',
+        message: 'Gagal memproses file RIS',
+        color: 'red',
+        position: 'top-right',
+      });
+    } finally {
+      setIsProcessingRis(false);
+      e.target.value = '';
+    }
+  };
+
+  // Function untuk handle direct PDF upload
+  const handleDirectPdfUpload = async () => {
+    if (!selectedFile) return;
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('title', selectedFile.name);
+    formData.append('sessionId', sessionId as string);
+
+    setUpLoading(true);
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const contentType = res.headers.get("content-type");
+      if (!res.ok){
+        const text = await res.text();
+        throw new Error(`Upload failed: ${text}`);
+      };
+
+      notifications.show({
+        title: 'Berhasil',
+        message: `File "${selectedFile.name}" berhasil diunggah`,
+        color: 'green',
+        position: 'top-right',
+      });
+
+      // Reset dan tutup modal
+      handleModalClose();
+      await fetchData();
+
+    } catch (error: any) {
+      notifications.show({
+        title: 'Upload Gagal',
+        message: error.message || 'Terjadi kesalahan saat upload',
+        color: 'red',
+        position: 'top-right',
+      });
+    } finally {
+      setUpLoading(false);
+    }
+  };
+
+  // Enhanced modal close handler
+  const handleModalClose = () => {
+    setUploadModalOpened(false);
+    setSelectedFile(null);
+    setRisFile(null);
+    setUploadMode('choose');
+    setUploadForm({
+      title: '',
+      author: '',
+      year: '',
+      abstract: '',
+      keywords: '',
+      doi: '',
+      // category: ''
+    });
+  };
+
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+  if (activeTab !== 'chat') {
+    // Reset context saat pindah dari chat ke tab lain
+    setResetChatContext(true)
+  }
+}, [activeTab]);
+
+  const handleContextReset = () => {
+    setResetChatContext(false);
+  }
 
   const fetchNeo4jData = async () => {
     try {
@@ -686,9 +920,6 @@ export default function Home() {
     setDetailModalEdge(edge);
   }, []);
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [uploading, setUpLoading] = useState(false);
-
   const handleUploadFile = () => {
     // fileInputRef.current?.click();
     setUploadModalOpened(true);
@@ -837,7 +1068,7 @@ export default function Home() {
         abstract: '',
         keywords: '',
         doi: '',
-        category: ''
+        // category: ''
       });
 
       // Refresh data setelah upload
@@ -856,19 +1087,19 @@ export default function Home() {
     }
   };
 
-  const handleModalClose = () => {
-    setUploadModalOpened(false);
-    setSelectedFile(null);
-    setUploadForm({
-      title: '',
-      author: '',
-      year: '',
-      abstract: '',
-      keywords: '',
-      doi: '',
-      category: ''
-    });
-  };  
+  // const handleModalClose = () => {
+  //   setUploadModalOpened(false);
+  //   setSelectedFile(null);
+  //   setUploadForm({
+  //     title: '',
+  //     author: '',
+  //     year: '',
+  //     abstract: '',
+  //     keywords: '',
+  //     doi: '',
+  //     category: ''
+  //   });
+  // };  
 
   //PERBAIKAN: Loading state yang lebih informatif
   if (!mounted || isLoadingSession || isLoadingData) {
@@ -942,6 +1173,39 @@ export default function Home() {
                         onChange={onFileChange}
                         accept="application/pdf"
                   /> */}
+                   {/* Dropdown View Mode */}
+                  <Select
+                    value={viewMode}
+                    onChange={(value) => setViewMode(value as 'graph' | 'detail')}
+                    data={[
+                      { 
+                        value: 'graph', 
+                        label: 'Graph',
+                        // leftSection: <IconChartDots2 size={16} />
+                      },
+                      { 
+                        value: 'detail', 
+                        label: 'Detail',
+                        // leftSection: <IconList size={16} />
+                      },
+                    ]}
+                    size="sm"
+                    radius="md"
+                    withCheckIcon={false}
+                    w={120}
+                    styles={{
+                      input: {
+                        backgroundColor: dark ? theme.colors.dark[6] : 'white',
+                        border: `1px solid ${dark ? theme.colors.dark[4] : theme.colors.gray[3]}`,
+                        fontSize: theme.fontSizes.sm,
+                        fontWeight: 500
+                      },
+                      section: {
+                        pointerEvents: 'none'
+                      }
+                    }}
+                  />
+
                   <Button
                     variant="light"
                     color="green"
@@ -996,44 +1260,47 @@ export default function Home() {
                   radius="md"
                 />
 
-                <Box>
-                  <Group gap="xs" mb="sm">
-                    <IconFilter size={16} />
-                    <Text size="sm" fw={500}>Jenis Relasi</Text>
-                  </Group>
-                  <Group gap="sm">
-                    {Object.entries(relationColors).map(([relation, color]) => (
-                      <Checkbox
-                        key={relation}
-                        value={relation}
-                        color={color}
-                        label={
-                          <Group gap="xs">
-                            <Badge variant="dot" color={color} size="sm">
-                              {getRelationDisplayName(relation)}
-                            </Badge>
-                          </Group>
-                        }
-                        checked={activeRelations.includes(relation)}
-                        onChange={(event) => 
-                          handleRelationChange(relation, event.currentTarget.checked)
-                          /*
-                          if (event.currentTarget.checked) {
-                            setActiveRelations([...activeRelations, relation]);
-                          } else {
-                            setActiveRelations(activeRelations.filter(r => r !== relation));
+                {viewMode === 'graph' && (
+                  <Box>
+                    <Group gap="xs" mb="sm">
+                      <IconFilter size={16} />
+                      <Text size="sm" fw={500}>Jenis Relasi</Text>
+                    </Group>
+                    <Group gap="sm">
+                      {Object.entries(relationColors).map(([relation, color]) => (
+                        <Checkbox
+                          key={relation}
+                          value={relation}
+                          color={color}
+                          label={
+                            <Group gap="xs">
+                              <Badge variant="dot" color={color} size="sm">
+                                {getRelationDisplayName(relation)}
+                              </Badge>
+                            </Group>
                           }
-                            */
-                           
-                        }
-                        styles={{
-                          input: { cursor: 'pointer' },
-                          label: { cursor: 'pointer' }
-                        }}
-                      />
-                    ))}
-                  </Group>
-                </Box>
+                          checked={activeRelations.includes(relation)}
+                          onChange={(event) => 
+                            handleRelationChange(relation, event.currentTarget.checked)
+                            /*
+                            if (event.currentTarget.checked) {
+                              setActiveRelations([...activeRelations, relation]);
+                            } else {
+                              setActiveRelations(activeRelations.filter(r => r !== relation));
+                            }
+                              */
+                            
+                          }
+                          styles={{
+                            input: { cursor: 'pointer' },
+                            label: { cursor: 'pointer' }
+                          }}
+                        />
+                      ))}
+                    </Group>
+                  </Box>
+                )}
+
               </Stack>
 
               <Paper 
@@ -1054,65 +1321,77 @@ export default function Home() {
                 }}
               >
                 {/* Dropdown di pojok kiri atas */}
-                <Box style={{
-                  width: '100%',
-                  height: '100%',
-                  position: 'relative',
-                }}>
-                <Box
-                  style={{
-                    position: 'absolute',
-                    top: 12,
-                    left: 12,
-                    zIndex: 10,
-                    minWidth: 120
-                  }}
-                >
-                  <Select
-                    value={graph}
-                    onChange={(value) => {
-                      if (value) {
-                        handleGraphTypeChange(value as 'visjs' | 'neovisjs');
-                      }}
-                    }
-                    data={[
-                      { value: 'visjs', label: 'Vis.js' },
-                      { value: 'neovisjs', label: 'Neo4j' },
-                    ]}
-                    size="sm"
-                    radius="md"
-                    withCheckIcon={false}
-                    styles={{
-                      input: {
-                        backgroundColor: dark ? theme.colors.dark[6] : 'white',
-                        border: `1px solid ${dark ? theme.colors.dark[4] : theme.colors.gray[3]}`,
-                        fontSize: theme.fontSizes.sm,
-                      }
+                {viewMode === 'graph' ? (
+                  
+                  <Box style={{
+                    width: '100%',
+                    height: '100%',
+                    position: 'relative',
+                  }}>
+                  <Box
+                    style={{
+                      position: 'absolute',
+                      top: 12,
+                      left: 12,
+                      zIndex: 10,
+                      minWidth: 120
                     }}
-                  />
-                </Box>
-
-                {/* Graph Container */}
-                <Box style={{ width: '100%', height: '100%' }}>
-                  {graph === 'visjs' ? (
-                    <NetworkGraph
-                      nodes={filteredNodes}
-                      edges={filteredEdges}
-                      onNodeClick={handleNodeClick}
-                      onEdgeClick={handleEdgeClick}
-                      // key={`visjs-${graphKey}-${filteredNodes.length}-${filteredEdges.length}`}
-                      key ={`${fullPath}-visjs-${graphKey}`}
+                  >
+                    <Select
+                      value={graph}
+                      onChange={(value) => {
+                        if (value) {
+                          handleGraphTypeChange(value as 'visjs' | 'neovisjs');
+                        }}
+                      }
+                      data={[
+                        { value: 'visjs', label: 'Vis.js' },
+                        { value: 'neovisjs', label: 'Neo4j' },
+                      ]}
+                      size="sm"
+                      radius="md"
+                      withCheckIcon={false}
+                      styles={{
+                        input: {
+                          backgroundColor: dark ? theme.colors.dark[6] : 'white',
+                          border: `1px solid ${dark ? theme.colors.dark[4] : theme.colors.gray[3]}`,
+                          fontSize: theme.fontSizes.sm,
+                        }
+                      }}
                     />
-                  ) : <Neograph relationFilters={activeArticles} sessionId={sessionId!} onNodeClick={handleNodeClick} onEdgeClick={handleEdgeClick} key={`neograph-${graphKey}-${activeArticles.join(',')}`}/>
-                  }
-                </Box>
-                </Box>
-                {/* <NetworkGraph
-                  nodes={filteredNodes}
-                  edges={filteredEdges}
-                  onNodeClick={handleNodeClick}
-                  onEdgeClick={handleEdgeClick}
-                /> */}
+                  </Box>
+  
+                  {/* Graph Container */}
+                  <Box style={{ width: '100%', height: '100%' }}>
+                    {graph === 'visjs' ? (
+                      <NetworkGraph
+                        nodes={filteredNodes}
+                        edges={filteredEdges}
+                        onNodeClick={handleNodeClick}
+                        onEdgeClick={handleEdgeClick}
+                        // key={`visjs-${graphKey}-${filteredNodes.length}-${filteredEdges.length}`}
+                        key ={`${fullPath}-visjs-${graphKey}`}
+                      />
+                    ) : <Neograph relationFilters={activeArticles} sessionId={sessionId!} onNodeClick={handleNodeClick} onEdgeClick={handleEdgeClick} key={`neograph-${graphKey}-${activeArticles.join(',')}`}/>
+                    }
+                  </Box>
+                  </Box>
+                  /* <NetworkGraph
+                    nodes={filteredNodes}
+                    edges={filteredEdges}
+                    onNodeClick={handleNodeClick}
+                    onEdgeClick={handleEdgeClick}
+                  /> */
+                ) : (
+                  <Box style={{ width: '100%', height: '100%', padding: '16px' }}>
+                    <ScrollArea style={{ height: '100%' }}>
+                      <ArticleDetailTable 
+                        nodes={nodes}
+                        activeArticles={activeArticles}
+                      />
+                    </ScrollArea>
+                  </Box>
+                )}
               </Paper>
             </Card>
           </Grid.Col>
@@ -1127,30 +1406,141 @@ export default function Home() {
               withBorder
               style={{ display: 'flex', flexDirection: 'column' }}
             >
-              <Group justify="space-between" mb="lg">
-                <Group gap="xs">
-                  <ThemeIcon variant="light" color="blue" size="lg">
-                    <IconBrandHipchat size={20} />
-                  </ThemeIcon>
-                  <Box>
-                    <Text size="xl" fw={700}>AI Assistant</Text>
-                    <Text size="sm" c="dimmed">Diskusi dan Analisis Artikel</Text>
-                  </Box>
-                </Group>
-                {(selectedNode || selectedEdge) && (
-                  <Badge 
-                    variant="gradient" 
-                    gradient={{ from: 'green', to: 'lime', deg: 45 }}
-                    size="lg"
-                    rightSection={<IconChevronRight size={12} />}
+              {/* Header Section dengan Tab Switcher */}
+              <Stack gap="sm" mb="sm">
+                {/* Tab Switcher - Circular Design */}
+                <Group justify="center" mb="sm">
+                  <Group 
+                    gap={0} 
+                    style={{ 
+                      padding: '0px',
+                      backgroundColor: dark ? theme.colors.dark[6] : theme.colors.gray[1],
+                      borderRadius: '50px',
+                      border: `1px solid ${dark ? theme.colors.dark[4] : theme.colors.gray[3]}`,
+                      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)'
+                    }}
                   >
-                    {selectedNode ? 'Node Terpilih' : 'Edge Terpilih'}
-                  </Badge>
-                )}
-              </Group>
+                    <ActionIcon
+                      variant={activeTab === 'chat' ? 'filled' : 'transparent'}
+                      color={activeTab === 'chat' ? 'blue' : 'gray'}
+                      size={34}
+                      radius="xl"
+                      onClick={() => setActiveTab('chat')}
+                      style={{
+                        transition: 'all 0.2s ease',
+                        transform: activeTab === 'chat' ? 'scale(1.05)' : 'scale(1)',
+                        boxShadow: activeTab === 'chat' ? '0 2px 8px rgba(37, 99, 235, 0.3)' : 'none'
+                      }}
+                    >
+                      <IconMessage size={20} />
+                    </ActionIcon>
+                    
+                    <ActionIcon
+                      variant={activeTab === 'annotation' ? 'filled' : 'transparent'}
+                      color={activeTab === 'annotation' ? 'orange' : 'gray'}
+                      size={34}
+                      radius="xl"
+                      onClick={() => setActiveTab('annotation')}
+                      style={{
+                        transition: 'all 0.2s ease',
+                        transform: activeTab === 'annotation' ? 'scale(1.05)' : 'scale(1)',
+                        boxShadow: activeTab === 'annotation' ? '0 2px 8px rgba(255, 165, 0, 0.3)' : 'none'
+                      }}
+                    >
+                      <IconHighlight size={20} />
+                    </ActionIcon>
+                  </Group>
+                </Group>
 
-              <Box style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <ChatPanel selectedNode={selectedNode} selectedEdge={selectedEdge} sessionId={sessionId}/>
+                {/* Dynamic Title & Description - Hanya untuk Chat */}
+                {activeTab === 'chat' && (
+                  <Group justify="space-between" align="flex-start">
+                    <Group gap="xs">
+                      <ThemeIcon 
+                        variant="light" 
+                        color="blue" 
+                        size="lg"
+                        style={{
+                          transition: 'all 0.3s ease',
+                          transform: 'scale(1.1)'
+                        }}
+                      >
+                        <IconBrandHipchat size={20} />
+                      </ThemeIcon>
+                      <Box>
+                        <Text 
+                          size="xl" 
+                          fw={700}
+                          style={{
+                            backgroundImage: 'linear-gradient(45deg, #3B82F6, #1E40AF)',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                            backgroundClip: 'text',
+                            transition: 'all 0.3s ease'
+                          }}
+                        >
+                          AI Assistant
+                        </Text>
+                        <Text size="sm" c="dimmed">
+                          Diskusi dan Analisis Artikel
+                        </Text>
+                      </Box>
+                    </Group>
+                    
+                    {/* Status Badge */}
+                    {(selectedNode || selectedEdge) && (
+                      <Badge 
+                        variant="gradient" 
+                        gradient={{ from: 'blue', to: 'cyan', deg: 45 }}
+                        size="lg"
+                        rightSection={<IconChevronRight size={12} />}
+                        style={{
+                          animation: 'pulse 2s infinite'
+                        }}
+                      >
+                        {selectedNode ? 'Node Terpilih' : 'Edge Terpilih'}
+                      </Badge>
+                    )}
+                  </Group>
+                )}
+
+                {/* Animated Divider - Hanya untuk Chat */}
+                {activeTab === 'chat' && (
+                  <Box
+                    style={{
+                      height: '2px',
+                      backgroundImage: 'linear-gradient(90deg, transparent, #3B82F6, transparent)',
+                      borderRadius: '1px',
+                      transition: 'all 0.3s ease'
+                    }}
+                  />
+                )}
+              </Stack>
+
+              {/* Content Area dengan Animasi */}
+              <Box 
+                style={{ 
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0 // Penting untuk flex container
+                }}
+              > 
+                {activeTab === 'chat' ? (
+                  <Box>
+                    <ChatPanel 
+                      selectedNode={selectedNode} 
+                      selectedEdge={selectedEdge} 
+                      sessionId={sessionId}
+                      resetContext={resetChatContext}
+                      onContextReset={handleContextReset}
+                    />
+                  </Box>
+                ) : (
+                  <Box>
+                    <AnnotationPanel sessionId={sessionId} />
+                  </Box>
+                )}
               </Box>
             </Card>
           </Grid.Col>
@@ -1269,7 +1659,7 @@ export default function Home() {
         </div>
       )}
       {/* Upload Modal */}
-      <Modal
+      {/* <Modal
         opened={uploadModalOpened}
         onClose={handleModalClose}
         title="Upload Artikel PDF"
@@ -1375,6 +1765,227 @@ export default function Home() {
             </Button>
             </Group>
         </Stack>
+      </Modal> */}
+
+      {/* // Enhanced Upload Modal JSX */}
+      <Modal
+        opened={uploadModalOpened}
+        onClose={handleModalClose}
+        title="Upload Artikel PDF"
+        size="lg"
+        centered
+      >
+        {uploadMode === 'choose' && (
+          <Stack gap="lg" align="center">
+            <Text size="lg" fw={500} ta="center">
+              Pilih cara upload artikel
+            </Text>
+            
+            <Group gap="md" grow>
+              <Card
+                withBorder
+                padding="xl"
+                radius="md"
+                style={{ cursor: 'pointer' }}
+                onClick={() => setUploadMode('with-ris')}
+              >
+                <Stack align="center" gap="sm">
+                  <ThemeIcon size="xl" variant="light" color="blue">
+                    <IconUpload size={24} />
+                  </ThemeIcon>
+                  <Text fw={500}>Upload dengan RIS</Text>
+                  <Text size="sm" c="dimmed" ta="center">
+                    Upload file RIS terlebih dahulu untuk mengisi metadata secara otomatis
+                  </Text>
+                </Stack>
+              </Card>
+              
+              <Card
+                withBorder
+                padding="xl"
+                radius="md"
+                style={{ cursor: 'pointer' }}
+                onClick={() => setUploadMode('direct')}
+              >
+                <Stack align="center" gap="sm">
+                  <ThemeIcon size="xl" variant="light" color="green">
+                    <IconUpload size={24} />
+                  </ThemeIcon>
+                  <Text fw={500}>Upload Langsung</Text>
+                  <Text size="sm" c="dimmed" ta="center">
+                    Upload PDF langsung tanpa mengisi metadata
+                  </Text>
+                </Stack>
+              </Card>
+            </Group>
+            
+            <Button variant="light" onClick={handleModalClose}>
+              Batal
+            </Button>
+          </Stack>
+        )}
+        
+        {uploadMode === 'with-ris' && (
+          <Stack gap="md">
+            <Group justify="space-between" align="center">
+              <Text size="lg" fw={500}>Upload dengan RIS</Text>
+              <ActionIcon variant="subtle" onClick={() => setUploadMode('choose')}>
+                <IconChevronLeft size={16} />
+              </ActionIcon>
+            </Group>
+            
+            {/* RIS File Upload */}
+            <div>
+              <input
+                type="file"
+                style={{ display: 'none'}}
+                ref={risFileInputRef}
+                onChange={onRisFileChange}
+                accept=".ris"
+              />
+              <Button
+                variant="light"
+                color="blue"
+                leftSection={<IconUpload size={16} />}
+                onClick={() => risFileInputRef.current?.click()}
+                fullWidth
+                loading={isProcessingRis}
+              >
+                {risFile ? `RIS: ${risFile.name}` : 'Pilih File RIS'}
+              </Button>
+            </div>
+            
+            {/* PDF File Upload */}
+            <div>
+              <input
+                type="file"
+                style={{ display: 'none'}}
+                ref={fileInputRef}
+                onChange={onFileChangeInModal}
+                accept="application/pdf"
+              />
+              <Button
+                variant="light"
+                color="green"
+                leftSection={<IconUpload size={16} />}
+                onClick={() => fileInputRef.current?.click()}
+                fullWidth
+              >
+                {selectedFile ? `PDF: ${selectedFile.name}` : 'Pilih File PDF'}
+              </Button>
+            </div>
+            
+            {/* Form Fields */}
+            <TextInput
+              label="Judul Artikel"
+              placeholder="Masukkan judul artikel"
+              value={uploadForm.title}
+              onChange={(e) => setUploadForm({...uploadForm, title: e.target.value})}
+              required
+            />
+            
+            <TextInput
+              label="Penulis"
+              placeholder="Masukkan nama penulis"
+              value={uploadForm.author}
+              onChange={(e) => setUploadForm({...uploadForm, author: e.target.value})}
+              required
+            />
+            
+            <TextInput
+              label="Tahun"
+              placeholder="Masukkan tahun publikasi"
+              value={uploadForm.year}
+              onChange={(e) => setUploadForm({...uploadForm, year: e.target.value})}
+              required
+            />
+            
+            <Textarea
+              label="Abstrak"
+              placeholder="Masukkan abstrak artikel"
+              value={uploadForm.abstract}
+              onChange={(e) => setUploadForm({...uploadForm, abstract: e.target.value})}
+              minRows={4}
+              required
+            />
+            
+            <TextInput
+              label="Kata Kunci"
+              placeholder="Masukkan kata kunci (pisahkan dengan koma)"
+              value={uploadForm.keywords}
+              onChange={(e) => setUploadForm({...uploadForm, keywords: e.target.value})}
+            />
+            
+            <TextInput
+              label="DOI"
+              placeholder="Masukkan DOI artikel"
+              value={uploadForm.doi}
+              onChange={(e) => setUploadForm({...uploadForm, doi: e.target.value})}
+            />
+            
+            <Group justify="flex-end" mt="md">
+              <Button variant="light" onClick={() => setUploadMode('choose')}>
+                Kembali
+              </Button>
+              <Button 
+                onClick={handleUploadSubmit} 
+                loading={uploading}
+                disabled={!selectedFile}
+              >
+                Upload
+              </Button>
+            </Group>
+          </Stack>
+        )}
+        
+        {uploadMode === 'direct' && (
+          <Stack gap="md">
+            <Group justify="space-between" align="center">
+              <Text size="lg" fw={500}>Upload Langsung</Text>
+              <ActionIcon variant="subtle" onClick={() => setUploadMode('choose')}>
+                <IconChevronLeft size={16} />
+              </ActionIcon>
+            </Group>
+            
+            <div>
+              <input
+                type="file"
+                style={{ display: 'none'}}
+                ref={fileInputRef}
+                onChange={onFileChangeInModal}
+                accept="application/pdf"
+              />
+              <Button
+                variant="light"
+                color="green"
+                leftSection={<IconUpload size={16} />}
+                onClick={() => fileInputRef.current?.click()}
+                fullWidth
+              >
+                {selectedFile ? `File: ${selectedFile.name}` : 'Pilih File PDF'}
+              </Button>
+            </div>
+            
+            {selectedFile && (
+              <Text size="sm" c="dimmed">
+                File: {selectedFile.name}
+              </Text>
+            )}
+            
+            <Group justify="flex-end" mt="md">
+              <Button variant="light" onClick={() => setUploadMode('choose')}>
+                Kembali
+              </Button>
+              <Button 
+                onClick={handleDirectPdfUpload} 
+                loading={uploading}
+                disabled={!selectedFile}
+              >
+                Upload Langsung
+              </Button>
+            </Group>
+          </Stack>
+        )}
       </Modal>
     </DashboardLayout>
   );
