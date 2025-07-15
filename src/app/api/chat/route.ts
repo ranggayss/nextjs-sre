@@ -366,6 +366,11 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const sessionId = searchParams.get('sessionId');
 
+        //add
+        const page = parseInt(searchParams.get('page') || '1');
+        const limit = parseInt(searchParams.get('limit') || '3');
+        const offset = (page - 1) * limit;
+
         if (!sessionId) {
             return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
         }
@@ -379,19 +384,37 @@ export async function GET(req: NextRequest) {
         });
 
          if (!session) {
-      return NextResponse.json({ error: 'Session not found or access denied' }, { status: 404 });
-    }
+            return NextResponse.json({ error: 'Session not found or access denied' }, { status: 404 });
+        }
+
+        const totalMessages = await prisma.chatMessage.count({
+            where: {
+                sessionId: sessionId,
+            }
+        })
 
         const chatHistory = await prisma.chatMessage.findMany({
             where: {
                 sessionId: sessionId,
             },
             orderBy: {
-                createdAt: 'asc'
-            }
-        })
+                createdAt: 'desc'
+            },
+            skip: offset,
+            take: limit,
+        });
 
-        return NextResponse.json(chatHistory);
+        const reversedHistory = chatHistory.reverse();
+
+        const hasMore = offset + limit < totalMessages;
+
+        return NextResponse.json({
+            messages: reversedHistory,
+            total: totalMessages,
+            hasMore: hasMore,
+            currentPage: page,
+            totalPages: Math.ceil(totalMessages / limit)
+        });
     } catch (error) {
         console.error('Error fetching chat history:', error);
         return NextResponse.json({ error: 'Internal Server Error'}, {status: 500});   
