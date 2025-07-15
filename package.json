@@ -9,6 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@citation-js/core": "^0.7.18",
+    "@citation-js/plugin-ris": "^0.7.18",
     "@google/genai": "^1.1.0",
     "@mantine/core": "^8.1.0",
     "@mantine/hooks": "^8.1.0",
@@ -46,8 +48,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
-    "react-split": "^2.0.14",
     "react-pdf-highlighter": "^8.0.0-rc.0",
+    "react-split": "^2.0.14",
     "remark-gfm": "^4.0.1",
     "vis-data": "^7.1.9",
     "vis-network": "^9.1.10"

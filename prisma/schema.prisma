@@ -82,6 +82,7 @@ model User {
   brainstormingSession BrainstormingSession[]
   drafts               Draft[]
   writerSessions       WriterSession[]
+  tokenUsages            TokenUsage[]
 }
 
 model Draft {
@@ -135,6 +136,7 @@ model BrainstormingSession {
   articles               Article[]
   user                   User          @relation(fields: [userId], references: [id])
   chatMessages           ChatMessage[]
+  tokenUsages            TokenUsage[]
 }
 
 model ChatMessage {
@@ -175,4 +177,24 @@ model Document {
   createdAt DateTime                   @default(now()) @map("created_at") @db.Timestamptz
 
   @@map("documents")
+}
+
+model TokenUsage {
+  id          String     @id @default(uuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId   String?    // Optional: jika berkaitan dengan sesi brainstorming
+  session     BrainstormingSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  tokensUsed  Int        // total token (input + output)
+  inputTokens Int        @default(0)
+  outputTokens Int       @default(0)
+  model       String     // contoh: "gpt-4", "gemini-pro", dll
+  purpose     String     // contoh: "chat", "summarization", "upload-analysis"
+  metadata    Json?      // optional info tambahan (artikel, node id, prompt, dsb)
+  createdAt   DateTime   @default(now())
+
+  // Index untuk query per user dan per sesi
+  @@index([userId])
+  @@index([sessionId])
 }
