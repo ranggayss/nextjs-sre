@@ -94,6 +94,7 @@ export default function Article(){
                 title: 'Error',
                 message: 'Gagal memuat riwayat catatan',
                 color: 'red',
+                position: 'top-right',
             });
         } finally{
             setLoadingHistory(false);
@@ -138,7 +139,7 @@ export default function Article(){
                         border: `1px solid ${isDark ? theme.colors.red[8] : theme.colors.red[2]}`,
                     }}>
                         <Text fw={600} size="sm" mb="xs">{title}</Text>
-                        <Text size="xs" c="dimmed">ID: {title}</Text>
+                        <Text size="xs" c="dimmed">ID: {id}</Text>
                     </Box>
                     <Text size="sm" c="red" fw={500} mt="md">
                         ⚠️ Tindakan ini tidak dapat dibatalkan!
@@ -276,6 +277,7 @@ export default function Article(){
                 title: 'Upload Gagal',
                 message: error.message || 'Terjadi Kesalahan saat upload',
                 color: 'red',
+                position: 'top-right'
             });
             console.error('File upload error:', error);
         } finally{
@@ -291,7 +293,7 @@ export default function Article(){
     );
 
 
-        const handleDeleteAnnotations = async (id: string, highlightedText: string) => {
+    const handleDeleteAnnotations = async (id: string, highlightedText: string) => {
         modals.openConfirmModal({
             title: (
                 <Text size="lg" fw={600} c="red">
