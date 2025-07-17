@@ -16,6 +16,13 @@ model Article {
   updateAt    DateTime              @updatedAt
   userId      String?
   sessionId   String?
+
+  author      String?
+  year        String?
+  abstract    String?
+  keywords    String?
+  doi         String?
+
   annotations Annotation[]
   session     BrainstormingSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user        User?                 @relation(fields: [userId], references: [id])
