@@ -20,7 +20,12 @@ import {
   Modal,
   ThemeIcon,
   CopyButton,
-  TextInput, // Added TextInput
+  TextInput,
+  Transition,
+  Badge,
+  Avatar,
+  Divider,
+  Card,
 } from "@mantine/core"
 import {
   IconX,
@@ -33,7 +38,11 @@ import {
   IconChevronRight,
   IconChevronLeft,
   IconSend,
-  IconNote, // Added IconNote for annotation
+  IconNote,
+  IconUser,
+  IconSparkles,
+  IconBrain,
+  IconMessageCircle,
 } from "@tabler/icons-react"
 import React, { useEffect, useState, useRef, useCallback } from "react"
 import type { ExtendedNode, ExtendedEdge } from "../types"
@@ -48,8 +57,8 @@ interface ChatPanelProps {
   sessionId?: string
   selectedNode: ExtendedNode | null
   selectedEdge: ExtendedEdge | null
-  resetContext?: boolean // New prop
-  onContextReset?: () => void // Callback when reset is done
+  resetContext?: boolean
+  onContextReset?: () => void
 }
 
 type Reference = {
@@ -137,16 +146,13 @@ export default function ChatPanel({
 
   const scrollSuggestions = (direction: "left" | "right") => {
     if (!suggestionContainerRef.current) return
-
     const container = suggestionContainerRef.current
     const scrollAmount = 200
-
     if (direction === "left") {
       container.scrollLeft -= scrollAmount
     } else {
       container.scrollLeft += scrollAmount
     }
-
     setSuggestionScrollPosition(container.scrollLeft)
   }
 
@@ -156,7 +162,6 @@ export default function ChatPanel({
 
   const checkScrollButtons = () => {
     if (!suggestionContainerRef.current) return
-
     const container = suggestionContainerRef.current
     setShowLeftScroll(container.scrollLeft > 0)
     setShowRightScroll(container.scrollLeft < container.scrollWidth - container.clientWidth)
@@ -165,11 +170,9 @@ export default function ChatPanel({
   // Update scroll buttons when suggestions change
   useEffect(() => {
     checkScrollButtons()
-
     if (suggestionContainerRef.current) {
       const container = suggestionContainerRef.current
       container.addEventListener("scroll", checkScrollButtons)
-
       return () => {
         container.removeEventListener("scroll", checkScrollButtons)
       }
@@ -189,17 +192,13 @@ export default function ChatPanel({
   const fetchChatMessages = useCallback(
     async (pageNumber = 1, append = false) => {
       if (loadingMore && pageNumber > 1) return // Prevent duplicate requests
-
       try {
         console.log(`🔄 Fetching messages - Page: ${pageNumber}, Append: ${append}`)
-
         if (pageNumber > 1) {
           setLoadingMore(true)
         }
-
         const res = await fetch(`/api/chat?sessionId=${sessionId}&page=${pageNumber}&limit=${MESSAGES_PER_PAGE}`)
         const data = await res.json()
-
         console.log(`📦 Received ${data.messages.length} messages, Total: ${data.total}, HasMore: ${data.hasMore}`)
 
         const formatted = data.messages.map((msg: any) => ({
@@ -225,7 +224,6 @@ export default function ChatPanel({
 
         setTotalMessages(data.total)
         setHasMore(data.hasMore)
-
         console.log(`📊 Updated state - Total: ${data.total}, HasMore: ${data.hasMore}, Page: ${pageNumber}`)
       } catch (error) {
         console.error("❌ Gagal memuat chat:", error)
@@ -252,7 +250,6 @@ export default function ChatPanel({
 
     isFetchingHistory.current = true
     const nextPage = page + 1
-
     console.log(`🔄 Loading page ${nextPage}`)
 
     try {
@@ -293,7 +290,6 @@ export default function ChatPanel({
       // Debounce scroll handling
       scrollTimeoutRef.current = setTimeout(() => {
         setIsScrolling(false)
-
         const scrollThreshold = 10 // Increased threshold
         const isNearTop = y <= scrollThreshold
         const canLoadMore = hasMore && !loadingMore && !isFetchingHistory.current
@@ -338,7 +334,6 @@ export default function ChatPanel({
 
         if (heightDifference > 0) {
           console.log(`📏 Restoring scroll position - Height diff: ${heightDifference}`)
-
           // Add offset to prevent immediate re-trigger
           const offset = 200 // 200px offset from top
           const newScrollTop = Math.max(scrollPosition.y + heightDifference + offset, offset)
@@ -385,6 +380,7 @@ export default function ChatPanel({
             }, 100)
           }
         }
+
         if (messageEndRef.current && (shouldScrollToBottom || isLoading)) {
           setTimeout(() => {
             messageEndRef.current?.scrollIntoView({
@@ -509,6 +505,7 @@ export default function ChatPanel({
     setSuggestionContext(null)
 
     const contextNodeIds = contextNodes.filter((node) => node && node.id).map((node) => String(node.id))
+
     setMessages((prev) => [...prev, { sender: "user", text: input, contextNodeIds: contextNodeIds }])
     setShouldScrollToBottom(true) // Ensure scroll to bottom for new messages
 
@@ -584,7 +581,6 @@ export default function ChatPanel({
             type: ref.type || "document",
             index: idx + 1,
           }
-
           return processedRef
         })
       }
@@ -605,8 +601,8 @@ export default function ChatPanel({
     return (
       <Box p="md" style={{ textAlign: "center" }}>
         <Group justify="center" gap="xs">
-          <Loader size="sm" />
-          <Text size="sm" c="dimmed">
+          <Loader size="sm" color="blue" />
+          <Text size="sm" c="dimmed" fw={500}>
             Memuat pesan sebelumnya...
           </Text>
         </Group>
@@ -620,7 +616,6 @@ export default function ChatPanel({
       console.log("🧪 Manual scroll test")
       console.log("📍 Current scroll position:", scrollPosition)
       console.log("📊 State - HasMore:", hasMore, "LoadingMore:", loadingMore)
-
       // Test manual load
       if (hasMore && !loadingMore) {
         console.log("🔄 Manual trigger loadMoreMessages")
@@ -662,8 +657,8 @@ export default function ChatPanel({
     return (
       <Box mb="sm">
         <Group gap={6} align="center">
-          <IconPaperclip size={14} color="gray" />
-          <Text size="xs" c="dimmed">
+          <IconPaperclip size={14} style={{ color: theme.colors.blue[6] }} />
+          <Text size="xs" c="blue" fw={500}>
             {nodeIds.length} artikel dilampirkan
           </Text>
         </Group>
@@ -686,7 +681,7 @@ export default function ChatPanel({
         title: "Format tidak didukung",
         message: "Mohon upload file PDF",
         color: "yellow",
-        position: 'top-right'
+        position: "top-right",
       })
       return
     }
@@ -722,7 +717,7 @@ export default function ChatPanel({
         title: "Berhasil",
         message: `File "${file.name}" berhasil diunggah dan diproses`,
         color: "green",
-        position: 'top-right'
+        position: "top-right",
       })
 
       console.log("File Uploaded:", data)
@@ -731,7 +726,7 @@ export default function ChatPanel({
         title: "Upload Gagal",
         message: error.message || "Terjadi Kesalahan saat upload",
         color: "red",
-        position: 'top-right'
+        position: "top-right",
       })
       console.error("File upload error:", error)
     } finally {
@@ -769,7 +764,6 @@ export default function ChatPanel({
       setSuggestions([])
       setShowSuggestions(false)
       setSuggestionContext(null)
-
       // Cleanup scroll timeout
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current)
@@ -799,28 +793,70 @@ export default function ChatPanel({
 
   const LoadingMessage = () => {
     return (
-      <Paper
-        shadow="xs"
-        radius="md"
+      <Card
+        shadow="sm"
+        radius="xl"
         withBorder
         style={{
           alignSelf: "flex-start",
-          backgroundColor: isDark ? theme.colors.dark[6] : "#f3f4f6",
-          color: isDark ? theme.colors.gray[2] : theme.black,
-          maxWidth: "100%",
+          background: isDark
+            ? `linear-gradient(135deg, ${theme.colors.dark[6]} 0%, ${theme.colors.dark[7]} 100%)`
+            : `linear-gradient(135deg, ${theme.colors.gray[0]} 0%, ${theme.colors.gray[1]} 100%)`,
+          maxWidth: "85%",
           padding: "20px",
+          border: `1px solid ${isDark ? theme.colors.dark[4] : theme.colors.gray[2]}`,
+          position: "relative",
+          overflow: "hidden",
         }}
       >
-        <Text size="md" c="dimmed" mb="xs">
-          AI
-        </Text>
-        <Group gap="xs" align="center">
-          <Loader size="sm" />
-          <Text size="sm" c="dimmed">
-            Sedang mengetik
+        <Box
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: "3px",
+            background: `linear-gradient(90deg, ${theme.colors.blue[6]}, ${theme.colors.cyan[5]}, ${theme.colors.violet[6]})`,
+            backgroundSize: "200% 100%",
+            animation: "shimmer 2s infinite",
+          }}
+        />
+        <Group mb="xs" gap="sm">
+          <Avatar
+            size="sm"
+            radius="xl"
+            style={{
+              background: `linear-gradient(135deg, ${theme.colors.blue[6]} 0%, ${theme.colors.cyan[5]} 100%)`,
+            }}
+          >
+            <IconBrain size={16} color="white" />
+          </Avatar>
+          <Text size="sm" fw={600} c={isDark ? theme.colors.gray[3] : theme.colors.gray[7]}>
+            AI Assistant
           </Text>
         </Group>
-      </Paper>
+        <Group gap="xs" align="center">
+          <Loader size="sm" color="blue" />
+          <Text size="sm" c="dimmed" fw={500}>
+            Sedang mengetik...
+          </Text>
+          <Box style={{ display: "flex", gap: "2px", marginLeft: "8px" }}>
+            {[0, 1, 2].map((i) => (
+              <Box
+                key={i}
+                style={{
+                  width: "4px",
+                  height: "4px",
+                  borderRadius: "50%",
+                  backgroundColor: theme.colors.blue[6],
+                  animation: `bounce 1.4s infinite ease-in-out both`,
+                  animationDelay: `${i * 0.16}s`,
+                }}
+              />
+            ))}
+          </Box>
+        </Group>
+      </Card>
     )
   }
 
@@ -874,7 +910,7 @@ export default function ChatPanel({
         width={350}
         position="bottom"
         withArrow
-        shadow="md"
+        shadow="xl"
         offset={5}
         withinPortal
         opened={opened}
@@ -882,65 +918,78 @@ export default function ChatPanel({
         transitionProps={{ duration: 200 }}
       >
         <Popover.Target>
-          <Anchor
+          <span
             onClick={() => handlerOpenPdf(reference.url)}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             style={{
-              color: theme.colors.blue[6],
-              textDecoration: "underline",
               cursor: "pointer",
-              backgroundColor: theme.colors.blue[0],
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              margin: "0 2px",
+              transition: "all 0.2s ease",
+              background: `linear-gradient(135deg, ${theme.colors.blue[6]} 0%, ${theme.colors.cyan[5]} 100%)`,
+              color: "white",
               padding: "2px 6px",
               borderRadius: "4px",
-              fontSize: "0.8rem",
-              fontWeight: 500,
               display: "inline-block",
-              marginLeft: "2px",
-              marginRight: "2px",
             }}
           >
             {reference.ref_mark}
-          </Anchor>
+          </span>
         </Popover.Target>
-        <Popover.Dropdown onMouseEnter={handlePopoverMouseEnter} onMouseLeave={handlePopoverMouseLeave}>
+        <Popover.Dropdown
+          onMouseEnter={handlePopoverMouseEnter}
+          onMouseLeave={handlePopoverMouseLeave}
+          style={{
+            background: isDark
+              ? `linear-gradient(135deg, ${theme.colors.dark[6]} 0%, ${theme.colors.dark[7]} 100%)`
+              : `linear-gradient(135deg, ${theme.colors.gray[0]} 0%, white 100%)`,
+            border: `1px solid ${isDark ? theme.colors.dark[4] : theme.colors.gray[2]}`,
+          }}
+        >
           <Box p="sm" style={{ maxWidth: 320 }}>
-            <Text size="sm" fw={500} mb={4}>
-              Referensi {order}
-            </Text>
+            <Group gap="xs" mb="sm">
+              <ThemeIcon size="sm" variant="gradient" gradient={{ from: "blue", to: "cyan" }}>
+                <IconCircleDot size={12} />
+              </ThemeIcon>
+              <Text size="sm" fw={600}>
+                Referensi {order}
+              </Text>
+            </Group>
             <Box
               mt={4}
               style={{
                 fontSize: "0.75rem",
                 wordBreak: "break-word",
-                lineHeight: 1.4,
+                lineHeight: 1.5,
                 overflow: "hidden",
                 display: "-webkit-box",
                 WebkitLineClamp: 4,
                 WebkitBoxOrient: "vertical",
                 color: "inherit",
-                marginBottom: "8px",
+                marginBottom: "12px",
+                padding: "8px",
+                backgroundColor: isDark ? theme.colors.dark[8] : theme.colors.gray[0],
+                borderRadius: theme.radius.sm,
+                border: `1px solid ${isDark ? theme.colors.dark[5] : theme.colors.gray[2]}`,
               }}
             >
               {reference.preview}
             </Box>
-            <Anchor
+            <Button
               onClick={() => handlerOpenPdf(reference.url)}
               size="xs"
+              variant="gradient"
+              gradient={{ from: "blue", to: "cyan" }}
+              leftSection={<IconCircleDot size={14} />}
+              fullWidth
               style={{
-                wordBreak: "break-all",
-                color: "#228be6",
-                textDecoration: "underline",
-                cursor: "pointer",
-                padding: "4px 8px",
-                borderRadius: "4px",
-                backgroundColor: "rgba(34, 139, 230, 0.1)",
-                display: "inline-block",
-                border: "1px solid rgba(34, 139, 230, 0.3)",
+                fontWeight: 500,
               }}
             >
-              🔗 Buka Dokumen Lengkap
-            </Anchor>
+              Buka Dokumen Lengkap
+            </Button>
           </Box>
         </Popover.Dropdown>
       </Popover>
@@ -1032,23 +1081,16 @@ export default function ChatPanel({
       return
     }
 
-    // Dalam fungsi `handleTextSelectionForAnnotation`, ubah bagian yang mendapatkan `documentUrl`
-    // dari:
-    // const documentUrl = message.references?.[0]?.url // Get the first reference URL
-    // menjadi:
-
     const documentUrl = message.references?.find(
       (ref) => ref.url.startsWith("http://") || ref.url.startsWith("https://"),
     )?.url
-
-    // Sisa kode di fungsi `handleTextSelectionForAnnotation` tetap sama.
 
     if (!documentUrl || documentUrl === "#") {
       notifications.show({
         title: "Tidak Ada Dokumen Sumber",
         message: "Respons AI ini tidak memiliki dokumen sumber yang dapat dianotasi.",
         color: "yellow",
-        position: 'top-right'
+        position: "top-right",
       })
       // Clear selection to prevent re-triggering
       selection.empty()
@@ -1071,7 +1113,7 @@ export default function ChatPanel({
         title: "Error",
         message: "Tidak ada teks yang dipilih atau URL dokumen tidak ditemukan.",
         color: "red",
-        position: 'top-right',
+        position: "top-right",
       })
       return
     }
@@ -1083,6 +1125,7 @@ export default function ChatPanel({
     })
 
     setIsSavingAnnotation(true)
+
     try {
       const response = await fetch("/api/annotation", {
         method: "POST",
@@ -1108,7 +1151,7 @@ export default function ChatPanel({
         title: "Berhasil",
         message: "Anotasi berhasil disimpan!",
         color: "green",
-        position: 'top-right',
+        position: "top-right",
       })
 
       setShowAnnotationModal(false)
@@ -1121,7 +1164,7 @@ export default function ChatPanel({
         title: "Gagal",
         message: error.message || "Terjadi kesalahan saat menyimpan anotasi.",
         color: "red",
-        position: 'top-right'
+        position: "top-right",
       })
     } finally {
       setIsSavingAnnotation(false)
@@ -1137,9 +1180,12 @@ export default function ChatPanel({
         maxHeight: "90vh",
         overflow: "hidden",
         position: "relative",
+        background: isDark
+          ? `linear-gradient(180deg, ${theme.colors.dark[8]} 0%, ${theme.colors.dark[9]} 100%)`
+          : `linear-gradient(180deg, ${theme.colors.gray[0]} 0%, white 100%)`,
       }}
     >
-      {/* Chat History */}
+      {/* Enhanced Chat History */}
       <ScrollArea
         ref={scrollAreaRef}
         style={{
@@ -1158,7 +1204,7 @@ export default function ChatPanel({
         onScrollPositionChange={handleScrollPositionChange}
       >
         <Stack
-          gap="md"
+          gap="lg"
           p="md"
           style={{
             minHeight: "535px",
@@ -1173,9 +1219,17 @@ export default function ChatPanel({
           {/* Info if reached beginning of chat */}
           {!hasMore && messages.length > 0 && (
             <Box p="md" style={{ textAlign: "center" }}>
-              <Text size="sm" c="dimmed">
-                Awal percakapan
-              </Text>
+              <Divider
+                label={
+                  <Group gap="xs">
+                    <IconMessageCircle size={16} />
+                    <Text size="sm" c="dimmed" fw={500}>
+                      Awal percakapan
+                    </Text>
+                  </Group>
+                }
+                labelPosition="center"
+              />
             </Box>
           )}
 
@@ -1190,299 +1244,378 @@ export default function ChatPanel({
                 textAlign: "center",
               }}
             >
-              <Text c="dimmed" size="sm">
-                Mulai Percakapan dengan AI Assistant....
-              </Text>
+              <Stack align="center" gap="md">
+                <ThemeIcon size={60} radius="xl" variant="gradient" gradient={{ from: "blue", to: "cyan", deg: 45 }}>
+                  <IconSparkles size={30} />
+                </ThemeIcon>
+                <Text c="dimmed" size="lg" fw={500}>
+                  Mulai Percakapan dengan AI Assistant
+                </Text>
+                <Text c="dimmed" size="sm">
+                  Ajukan pertanyaan atau pilih dokumen untuk memulai
+                </Text>
+              </Stack>
             </Box>
           ) : (
             <>
               {messages.map((msg, idx) => (
-                <Paper
-                  key={idx}
-                  shadow="xs"
-                  radius="md"
-                  withBorder
-                  style={{
-                    alignSelf: msg.sender === "user" ? "flex-end" : "flex-start",
-                    backgroundColor:
-                      msg.sender === "user"
-                        ? isDark
-                          ? theme.colors.blue[9]
-                          : "#e0f7fa"
-                        : isDark
-                          ? theme.colors.dark[6]
-                          : "#f3f4f6",
-                    color: isDark ? theme.colors.gray[2] : theme.black,
-                    maxWidth: "100%",
-                    padding: "20px",
-                    position: "relative",
-                  }}
-                  // NEW: Add onMouseUp handler for AI messages
-                  onMouseUp={msg.sender === "ai" ? (e) => handleTextSelectionForAnnotation(e, msg) : undefined}
-                >
-                  <Group justify="space-between" mb="xs">
-                    <Text size="lg" c="dimmed">
-                      {msg.sender === "user" ? "Anda" : "AI"}
-                    </Text>
-                    {/* Copy Button - only for AI response */}
-                    {msg.sender === "ai" && (
-                      <CopyButton value={msg.text} timeout={2000}>
-                        {({ copied, copy }) => (
-                          <Tooltip label={copied ? "Berhasil disalin!" : "Salin jawaban"} position="top" withArrow>
-                            <ActionIcon
-                              variant="subtle"
-                              size="sm"
-                              onClick={copy}
-                              style={{
-                                transition: "all 0.2s ease",
-                                transform: copied ? "scale(1.1)" : "scale(1)",
-                              }}
-                            >
-                              {copied ? (
-                                <IconCheck size={16} style={{ color: theme.colors.green[6] }} />
-                              ) : (
-                                <IconCopy size={16} style={{ color: theme.colors.gray[6] }} />
-                              )}
-                            </ActionIcon>
-                          </Tooltip>
+                <Transition key={idx} mounted={true} transition="slide-up" duration={300} timingFunction="ease">
+                  {(styles) => (
+                    <Card
+                      shadow="sm"
+                      radius="xl"
+                      withBorder
+                      style={{
+                        ...styles,
+                        alignSelf: msg.sender === "user" ? "flex-end" : "flex-start",
+                        background:
+                          msg.sender === "user"
+                            ? isDark
+                              ? `linear-gradient(135deg, ${theme.colors.blue[8]} 0%, ${theme.colors.blue[9]} 100%)`
+                              : `linear-gradient(135deg, ${theme.colors.blue[0]} 0%, ${theme.colors.cyan[0]} 100%)`
+                            : isDark
+                              ? `linear-gradient(135deg, ${theme.colors.dark[6]} 0%, ${theme.colors.dark[7]} 100%)`
+                              : `linear-gradient(135deg, ${theme.colors.gray[0]} 0%, white 100%)`,
+                        maxWidth: "85%",
+                        padding: "20px",
+                        border: `1px solid ${
+                          msg.sender === "user"
+                            ? isDark
+                              ? theme.colors.blue[7]
+                              : theme.colors.blue[2]
+                            : isDark
+                              ? theme.colors.dark[4]
+                              : theme.colors.gray[2]
+                        }`,
+                        position: "relative",
+                        overflow: "hidden",
+                      }}
+                      // NEW: Add onMouseUp handler for AI messages
+                      onMouseUp={msg.sender === "ai" ? (e) => handleTextSelectionForAnnotation(e, msg) : undefined}
+                    >
+                      {/* Accent line for AI messages */}
+                      {msg.sender === "ai" && (
+                        <Box
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: "3px",
+                            background: `linear-gradient(90deg, ${theme.colors.blue[6]}, ${theme.colors.cyan[5]}, ${theme.colors.violet[6]})`,
+                          }}
+                        />
+                      )}
+
+                      <Group justify="space-between" mb="md">
+                        <Group gap="sm">
+                          <Avatar
+                            size="sm"
+                            radius="xl"
+                            style={{
+                              background:
+                                msg.sender === "user"
+                                  ? `linear-gradient(135deg, ${theme.colors.green[6]} 0%, ${theme.colors.teal[5]} 100%)`
+                                  : `linear-gradient(135deg, ${theme.colors.blue[6]} 0%, ${theme.colors.cyan[5]} 100%)`,
+                            }}
+                          >
+                            {msg.sender === "user" ? (
+                              <IconUser size={16} color="white" />
+                            ) : (
+                              <IconBrain size={16} color="white" />
+                            )}
+                          </Avatar>
+                          <Text size="sm" fw={600} c={isDark ? theme.colors.gray[3] : theme.colors.gray[7]}>
+                            {msg.sender === "user" ? "Anda" : "AI Assistant"}
+                          </Text>
+                        </Group>
+
+                        {/* Copy Button - only for AI response */}
+                        {msg.sender === "ai" && (
+                          <CopyButton value={msg.text} timeout={2000}>
+                            {({ copied, copy }) => (
+                              <Tooltip label={copied ? "Berhasil disalin!" : "Salin jawaban"} position="top" withArrow>
+                                <ActionIcon
+                                  variant="subtle"
+                                  size="sm"
+                                  onClick={copy}
+                                  style={{
+                                    transition: "all 0.2s ease",
+                                    transform: copied ? "scale(1.1)" : "scale(1)",
+                                  }}
+                                >
+                                  {copied ? (
+                                    <IconCheck size={16} style={{ color: theme.colors.green[6] }} />
+                                  ) : (
+                                    <IconCopy size={16} style={{ color: theme.colors.gray[6] }} />
+                                  )}
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                          </CopyButton>
                         )}
-                      </CopyButton>
-                    )}
-                  </Group>
+                      </Group>
 
-                  {/* Simple attachment display for user messages */}
-                  {msg.sender === "user" && msg.contextNodeIds && msg.contextNodeIds.length > 0 && (
-                    <AttachmentDisplay nodeIds={msg.contextNodeIds} />
-                  )}
+                      {/* Enhanced attachment display for user messages */}
+                      {msg.sender === "user" && msg.contextNodeIds && msg.contextNodeIds.length > 0 && (
+                        <AttachmentDisplay nodeIds={msg.contextNodeIds} />
+                      )}
 
-                  {msg.sender === "user" ? (
-                    <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
-                      {msg.text}
-                    </Text>
-                  ) : (
-                    <TypographyStylesProvider className="ai-message-content">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          p: ({ children }) => {
-                            const extractText = (children: React.ReactNode): string => {
-                              if (children === null || children === undefined) return ""
-                              if (typeof children === "string" || typeof children === "number") {
-                                return String(children)
-                              }
-                              if (Array.isArray(children)) {
-                                return children.map(extractText).join("")
-                              }
-                              if (React.isValidElement(children)) {
-                                return extractText((children.props as { children?: React.ReactNode }).children)
-                              }
-                              return ""
-                            }
+                      {msg.sender === "user" ? (
+                        <Text size="sm" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                          {msg.text}
+                        </Text>
+                      ) : (
+                        <TypographyStylesProvider className="ai-message-content">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              p: ({ children }) => {
+                                const extractText = (children: React.ReactNode): string => {
+                                  if (children === null || children === undefined) return ""
+                                  if (typeof children === "string" || typeof children === "number") {
+                                    return String(children)
+                                  }
+                                  if (Array.isArray(children)) {
+                                    return children.map(extractText).join("")
+                                  }
+                                  if (React.isValidElement(children)) {
+                                    return extractText((children.props as { children?: React.ReactNode }).children)
+                                  }
+                                  return ""
+                                }
 
-                            const textContent = extractText(children)
+                                const textContent = extractText(children)
+                                if (!msg.references)
+                                  return (
+                                    <Box mb="xs" style={{ lineHeight: 1.6, fontSize: "14px" }}>
+                                      {children}
+                                    </Box>
+                                  )
 
-                            if (!msg.references)
-                              return (
-                                <Text size="sm" mb="xs">
+                                const dedupedReferences = Array.from(
+                                  new Map(msg.references.map((ref) => [`${ref.url}-${ref.ref_mark}`, ref])).values(),
+                                )
+                                const sortedReferences = dedupedReferences.sort(
+                                  (a, b) => (a.index ?? 999) - (b.index ?? 999),
+                                )
+
+                                const processedContent = processTextWithReferences(textContent, sortedReferences)
+
+                                return (
+                                  <Box mb="xs" style={{ lineHeight: 1.6, fontSize: "14px" }}>
+                                    {processedContent}
+                                  </Box>
+                                )
+                              },
+                              h1: ({ children }) => (
+                                <Text
+                                  size="xl"
+                                  fw={700}
+                                  mb="md"
+                                  c={isDark ? theme.colors.gray[2] : theme.colors.gray[8]}
+                                >
                                   {children}
                                 </Text>
-                              )
-
-                            const dedupedReferences = Array.from(
-                              new Map(msg.references.map((ref) => [`${ref.url}-${ref.ref_mark}`, ref])).values(),
-                            )
-                            const sortedReferences = dedupedReferences.sort(
-                              (a, b) => (a.index ?? 999) - (b.index ?? 999),
-                            )
-
-                            const processedContent = processTextWithReferences(textContent, sortedReferences)
-                            return (
-                              <Text size="sm" mb="xs">
-                                {processedContent}
-                              </Text>
-                            )
-                          },
-                          h1: ({ children }) => (
-                            <Text size="xl" fw={700} mb="md">
-                              {children}
-                            </Text>
-                          ),
-                          h3: ({ children }) => (
-                            <Text size="md" fw={600} mb="sm">
-                              {children}
-                            </Text>
-                          ),
-                          ul: ({ children }) => (
-                            <Box component="ul" ml="md" mb="sm">
-                              {children}
-                            </Box>
-                          ),
-                          ol: ({ children }) => (
-                            <Box component="ol" ml="md" mb="sm">
-                              {children}
-                            </Box>
-                          ),
-                          li: ({ children }) => (
-                            <Text component="li" size="sm" mb="xs">
-                              {children}
-                            </Text>
-                          ),
-                          strong: ({ children }) => (
-                            <Text component="span" fw={700}>
-                              {children}
-                            </Text>
-                          ),
-                          em: ({ children }) => (
-                            <Text component="span" fs="italic">
-                              {children}
-                            </Text>
-                          ),
-                          code: ({ children, className }) => {
-                            const isInline = !className
-                            return isInline ? (
-                              <Text
-                                component="code"
-                                bg="gray.1"
-                                px="xs"
-                                style={{
-                                  borderRadius: "4px",
-                                  fontSize: "0.875em",
-                                  fontFamily: "monospace",
-                                }}
-                              >
-                                {children}
-                              </Text>
-                            ) : (
-                              <Paper
-                                bg="gray.0"
-                                p="sm"
-                                mb="sm"
-                                style={{
-                                  borderRadius: "8px",
-                                  overflow: "auto",
-                                }}
-                              >
+                              ),
+                              h3: ({ children }) => (
                                 <Text
-                                  component="pre"
-                                  size="sm"
-                                  style={{
-                                    fontFamily: "monospace",
-                                    margin: 0,
-                                    whiteSpace: "pre-wrap",
-                                  }}
+                                  size="md"
+                                  fw={600}
+                                  mb="sm"
+                                  c={isDark ? theme.colors.gray[3] : theme.colors.gray[7]}
                                 >
-                                  <code>{children}</code>
+                                  {children}
                                 </Text>
-                              </Paper>
-                            )
-                          },
-                          table: ({ children }) => (
-                            <Box style={{ overflowX: "auto" }} mb="md">
-                              <Box
-                                component="table"
-                                style={{
-                                  width: "100%",
-                                  borderCollapse: "collapse",
-                                  fontSize: "0.875rem",
-                                }}
-                              >
-                                {children}
-                              </Box>
-                            </Box>
-                          ),
-                          thead: ({ children }) => <Box component="thead">{children}</Box>,
-                          tbody: ({ children }) => <Box component="tbody">{children}</Box>,
-                          tr: ({ children }) => (
-                            <Box
-                              component="tr"
-                              style={{
-                                borderBottom: "1px solid #e9ecef",
-                              }}
-                            >
-                              {children}
-                            </Box>
-                          ),
-                          th: ({ children }) => (
-                            <Box
-                              component="th"
-                              p="sm"
-                              style={{
-                                backgroundColor: "#f8f9fa",
-                                fontWeight: 600,
-                                textAlign: "left",
-                                border: "1px solid #dee2e6",
-                              }}
-                            >
-                              {children}
-                            </Box>
-                          ),
-                          td: ({ children }) => (
-                            <Box
-                              component="td"
-                              p="sm"
-                              style={{
-                                border: "1px solid #dee2e6",
-                                verticalAlign: "top",
-                              }}
-                            >
-                              {children}
-                            </Box>
-                          ),
-                          blockquote: ({ children }) => (
-                            <Paper
-                              pl="md"
-                              py="sm"
-                              mb="sm"
-                              style={{
-                                borderLeft: "4px solid #228be6",
-                                backgroundColor: "#f0f8ff",
-                              }}
-                            >
-                              {children}
-                            </Paper>
-                          ),
-                        }}
-                      >
-                        {msg.text}
-                      </ReactMarkdown>
-                      {/* Reference List */}
-                      {(msg.references?.length ?? 0) > 0 && (
-                        <Box
-                          mt="sm"
-                          p="xs"
-                          style={{
-                            backgroundColor: isDark ? theme.colors.dark[7] : theme.colors.gray[1],
-                            borderRadius: theme.radius.sm,
-                          }}
-                        >
-                          <Text size="xs" c="dimmed">
-                            Referensi:
-                          </Text>
-                          <Stack gap={4} mt={4}>
-                            {Array.from(
-                              new Map(msg.references?.map((ref) => [`${ref.url}-${ref.ref_mark}`, ref])).values(),
-                            ).map((ref, idx) => (
-                              <Group key={`${ref.url}-${ref.ref_mark}`} gap={4} align="flex-start">
-                                <Text size="xs">{ref.ref_mark}</Text>
-                                <Anchor
-                                  href="#"
-                                  size="xs"
-                                  style={{ wordBreak: "break-all" }}
-                                  onClick={(e) => {
-                                    e.preventDefault()
-                                    handlerOpenPdf(ref.url)
+                              ),
+                              ul: ({ children }) => (
+                                <Box component="ul" ml="md" mb="sm">
+                                  {children}
+                                </Box>
+                              ),
+                              ol: ({ children }) => (
+                                <Box component="ol" ml="md" mb="sm">
+                                  {children}
+                                </Box>
+                              ),
+                              li: ({ children }) => (
+                                <Text component="li" size="sm" mb="xs" style={{ lineHeight: 1.5 }}>
+                                  {children}
+                                </Text>
+                              ),
+                              strong: ({ children }) => (
+                                <Text component="span" fw={700}>
+                                  {children}
+                                </Text>
+                              ),
+                              em: ({ children }) => (
+                                <Text component="span" fs="italic">
+                                  {children}
+                                </Text>
+                              ),
+                              code: ({ children, className }) => {
+                                const isInline = !className
+                                return isInline ? (
+                                  <Badge
+                                    variant="light"
+                                    color="gray"
+                                    style={{
+                                      fontFamily: "monospace",
+                                      fontSize: "0.8em",
+                                    }}
+                                  >
+                                    {children}
+                                  </Badge>
+                                ) : (
+                                  <Paper
+                                    bg={isDark ? theme.colors.dark[8] : theme.colors.gray[0]}
+                                    p="md"
+                                    mb="sm"
+                                    radius="md"
+                                    withBorder
+                                    style={{
+                                      overflow: "auto",
+                                    }}
+                                  >
+                                    <Text
+                                      component="pre"
+                                      size="sm"
+                                      style={{
+                                        fontFamily: "monospace",
+                                        margin: 0,
+                                        whiteSpace: "pre-wrap",
+                                      }}
+                                    >
+                                      <code>{children}</code>
+                                    </Text>
+                                  </Paper>
+                                )
+                              },
+                              table: ({ children }) => (
+                                <Box style={{ overflowX: "auto" }} mb="md">
+                                  <Box
+                                    component="table"
+                                    style={{
+                                      width: "100%",
+                                      borderCollapse: "collapse",
+                                      fontSize: "0.875rem",
+                                    }}
+                                  >
+                                    {children}
+                                  </Box>
+                                </Box>
+                              ),
+                              thead: ({ children }) => <Box component="thead">{children}</Box>,
+                              tbody: ({ children }) => <Box component="tbody">{children}</Box>,
+                              tr: ({ children }) => (
+                                <Box
+                                  component="tr"
+                                  style={{
+                                    borderBottom: `1px solid ${isDark ? theme.colors.dark[5] : theme.colors.gray[2]}`,
                                   }}
                                 >
-                                  {ref.text}
-                                </Anchor>
+                                  {children}
+                                </Box>
+                              ),
+                              th: ({ children }) => (
+                                <Box
+                                  component="th"
+                                  p="sm"
+                                  style={{
+                                    backgroundColor: isDark ? theme.colors.dark[7] : theme.colors.gray[0],
+                                    fontWeight: 600,
+                                    textAlign: "left",
+                                    border: `1px solid ${isDark ? theme.colors.dark[5] : theme.colors.gray[2]}`,
+                                  }}
+                                >
+                                  {children}
+                                </Box>
+                              ),
+                              td: ({ children }) => (
+                                <Box
+                                  component="td"
+                                  p="sm"
+                                  style={{
+                                    border: `1px solid ${isDark ? theme.colors.dark[5] : theme.colors.gray[2]}`,
+                                    verticalAlign: "top",
+                                  }}
+                                >
+                                  {children}
+                                </Box>
+                              ),
+                              blockquote: ({ children }) => (
+                                <Paper
+                                  pl="md"
+                                  py="sm"
+                                  mb="sm"
+                                  radius="md"
+                                  style={{
+                                    borderLeft: `4px solid ${theme.colors.blue[6]}`,
+                                    backgroundColor: isDark ? theme.colors.dark[7] : theme.colors.blue[0],
+                                  }}
+                                >
+                                  {children}
+                                </Paper>
+                              ),
+                            }}
+                          >
+                            {msg.text}
+                          </ReactMarkdown>
+
+                          {/* Enhanced Reference List */}
+                          {(msg.references?.length ?? 0) > 0 && (
+                            <Card
+                              mt="md"
+                              p="sm"
+                              radius="md"
+                              withBorder
+                              style={{
+                                background: isDark
+                                  ? `linear-gradient(135deg, ${theme.colors.dark[7]} 0%, ${theme.colors.dark[8]} 100%)`
+                                  : `linear-gradient(135deg, ${theme.colors.gray[0]} 0%, ${theme.colors.gray[1]} 100%)`,
+                                border: `1px solid ${isDark ? theme.colors.dark[5] : theme.colors.gray[2]}`,
+                              }}
+                            >
+                              <Group gap="xs" mb="sm">
+                                <ThemeIcon size="sm" variant="gradient" gradient={{ from: "blue", to: "cyan" }}>
+                                  <IconCircleDot size={12} />
+                                </ThemeIcon>
+                                <Text size="xs" fw={600} c={isDark ? theme.colors.gray[4] : theme.colors.gray[6]}>
+                                  Referensi:
+                                </Text>
                               </Group>
-                            ))}
-                          </Stack>
-                        </Box>
+                              <Stack gap={6}>
+                                {Array.from(
+                                  new Map(msg.references?.map((ref) => [`${ref.url}-${ref.ref_mark}`, ref])).values(),
+                                ).map((ref, idx) => (
+                                  <Group key={`${ref.url}-${ref.ref_mark}`} gap={8} align="flex-start">
+                                    <Badge size="xs" variant="light" color="blue">
+                                      {ref.ref_mark}
+                                    </Badge>
+                                    <Anchor
+                                      href="#"
+                                      size="xs"
+                                      style={{
+                                        wordBreak: "break-all",
+                                        lineHeight: 1.4,
+                                      }}
+                                      onClick={(e) => {
+                                        e.preventDefault()
+                                        handlerOpenPdf(ref.url)
+                                      }}
+                                    >
+                                      {ref.text}
+                                    </Anchor>
+                                  </Group>
+                                ))}
+                              </Stack>
+                            </Card>
+                          )}
+                        </TypographyStylesProvider>
                       )}
-                    </TypographyStylesProvider>
+                    </Card>
                   )}
-                </Paper>
+                </Transition>
               ))}
               {isLoading && <LoadingMessage />}
               <div ref={messageEndRef} />
@@ -1491,47 +1624,80 @@ export default function ChatPanel({
         </Stack>
       </ScrollArea>
 
-      {/* Context Preview Chips - just above the textarea */}
+      {/* Enhanced Context Preview Chips - More Compact */}
       {contextNodes.length > 0 && (
-        <Box px="md" style={{ flexShrink: 0 }}>
-          <Group mb="xs" mt="sm" wrap="wrap">
+        <Box px="md" py="xs" style={{ flexShrink: 0 }}>
+          <Group mb="xs" gap="xs" wrap="wrap">
             {contextNodes.map((node) => (
-              <Paper
-                key={`context-node-${node.id}`} // Changed from node.label to unique key
-                withBorder
-                shadow="xs"
-                p="xs"
-                style={{ display: "flex", alignItems: "center", gap: 8 }}
+              <Badge
+                key={`context-node-${node.id}`}
+                variant="gradient"
+                gradient={{ from: "blue", to: "cyan", deg: 45 }}
+                size="sm"
+                radius="md"
+                style={{
+                  paddingLeft: "8px",
+                  paddingRight: "4px",
+                  height: "24px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontSize: "11px",
+                  fontWeight: 500,
+                  maxWidth: "200px",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                rightSection={
+                  <ActionIcon
+                    size="xs"
+                    variant="transparent"
+                    color="white"
+                    onClick={() => removeContextNode(node)}
+                    style={{
+                      minWidth: "16px",
+                      width: "16px",
+                      height: "16px",
+                      marginLeft: "2px",
+                    }}
+                  >
+                    <IconX size={10} />
+                  </ActionIcon>
+                }
+                leftSection={<IconPaperclip size={10} />}
               >
-                <Text size="sm" fw={600}>
-                  {node.title || node.label}
-                </Text>
-                <ActionIcon size="xs" variant="subtle" onClick={() => removeContextNode(node)}>
-                  <IconX size={14} />
-                </ActionIcon>
-              </Paper>
+                {(node.title || node.label || '').length > 20
+                  ? `${(node.title || node.label || '').substring(0, 20)}...`
+                  : node.title || node.label}
+              </Badge>
             ))}
           </Group>
         </Box>
       )}
 
-      {/* Input */}
+      {/* Enhanced Input Area */}
       <Box
         p="md"
         style={{
           flexShrink: 0,
-          borderTop: "1px solid #e9ecef",
-          backgroundClip: "var(--mantine-color-body)",
+          borderTop: `1px solid ${isDark ? theme.colors.dark[5] : theme.colors.gray[2]}`,
+          background: isDark
+            ? `linear-gradient(180deg, ${theme.colors.dark[7]} 0%, ${theme.colors.dark[8]} 100%)`
+            : `linear-gradient(180deg, white 0%, ${theme.colors.gray[0]} 100%)`,
         }}
       >
         {/* Combined Input Area with Suggestions */}
-        <Paper
+        <Card
           withBorder
           radius="xl"
           p="md"
+          shadow="sm"
           style={{
-            backgroundColor: isDark ? theme.colors.dark[7] : theme.colors.gray[1],
-            border: `1px solid ${isDark ? theme.colors.dark[5] : theme.colors.gray[3]}`,
+            background: isDark
+              ? `linear-gradient(135deg, ${theme.colors.dark[6]} 0%, ${theme.colors.dark[7]} 100%)`
+              : `linear-gradient(135deg, white 0%, ${theme.colors.gray[0]} 100%)`,
+            border: `1px solid ${isDark ? theme.colors.dark[4] : theme.colors.gray[2]}`,
           }}
         >
           {/* Input Row */}
@@ -1550,7 +1716,7 @@ export default function ChatPanel({
                 rows={1}
                 style={{
                   width: "100%",
-                  padding: "12px",
+                  padding: "16px",
                   backgroundColor: "transparent",
                   color: isDark ? theme.colors.gray[2] : theme.black,
                   border: "none",
@@ -1561,7 +1727,8 @@ export default function ChatPanel({
                   overflow: "hidden",
                   fontFamily: "inherit",
                   fontSize: "14px",
-                  lineHeight: "1.4",
+                  lineHeight: "1.5",
+                  borderRadius: theme.radius.md,
                 }}
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement
@@ -1570,39 +1737,70 @@ export default function ChatPanel({
                 }}
               />
             </Box>
-            {/* Web Search Toggle */}
+
+            {/* Enhanced Web Search Toggle */}
             <Tooltip label={forceWeb ? "Pencarian web aktif" : "Pencarian web nonaktif"} position="top" withArrow>
-              <Switch
-                size="md"
-                checked={forceWeb}
-                onChange={(event) => setForceWeb(event.currentTarget.checked)}
-                thumbIcon={
-                  forceWeb ? (
-                    <IconSearch size="0.8rem" color={theme.colors.blue[6]} stroke={3} />
-                  ) : (
-                    <IconWorld size="0.8rem" color={theme.colors.gray[6]} stroke={2} />
-                  )
-                }
-              />
+              <Box
+                style={{
+                  padding: "8px",
+                  borderRadius: theme.radius.md,
+                  background: forceWeb
+                    ? `linear-gradient(135deg, ${theme.colors.blue[1]} 0%, ${theme.colors.cyan[1]} 100%)`
+                    : isDark
+                      ? theme.colors.dark[5]
+                      : theme.colors.gray[1],
+                  border: `1px solid ${forceWeb ? theme.colors.blue[3] : isDark ? theme.colors.dark[4] : theme.colors.gray[3]}`,
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <Switch
+                  size="md"
+                  checked={forceWeb}
+                  onChange={(event) => setForceWeb(event.currentTarget.checked)}
+                  thumbIcon={
+                    forceWeb ? (
+                      <IconSearch size="0.8rem" color={theme.colors.blue[6]} stroke={3} />
+                    ) : (
+                      <IconWorld size="0.8rem" color={theme.colors.gray[6]} stroke={2} />
+                    )
+                  }
+                  styles={{
+                    track: {
+                      backgroundColor: forceWeb ? theme.colors.blue[6] : undefined,
+                    },
+                  }}
+                />
+              </Box>
             </Tooltip>
-            {/* Send Button */}
+
+            {/* Enhanced Send Button */}
             <ActionIcon
               onClick={handleSend}
               disabled={!input.trim() || isLoading}
-              size="lg"
-              variant="filled"
-              color="blue"
+              size="xl"
+              variant="gradient"
+              gradient={{ from: "blue", to: "cyan", deg: 45 }}
               radius="xl"
               style={{
-                backgroundColor: !input.trim() || isLoading ? theme.colors.gray[6] : theme.colors.blue[6],
                 cursor: !input.trim() || isLoading ? "not-allowed" : "pointer",
+                opacity: !input.trim() || isLoading ? 0.5 : 1,
+                transition: "all 0.2s ease",
+                transform: !input.trim() || isLoading ? "scale(0.95)" : "scale(1)",
+              }}
+              styles={{
+                root: {
+                  "&:hover": {
+                    transform: !input.trim() || isLoading ? "scale(0.95)" : "scale(1.05)",
+                    boxShadow: theme.shadows.md,
+                  },
+                },
               }}
             >
               <IconSend size={20} />
             </ActionIcon>
           </Group>
 
-          {/* Suggested Questions Row */}
+          {/* Enhanced Suggested Questions Row - Better Spacing */}
           {suggestions.length > 0 && (
             <Group align="center" gap="sm" style={{ position: "relative" }}>
               {/* Left Scroll Button */}
@@ -1610,17 +1808,15 @@ export default function ChatPanel({
                 <ActionIcon
                   onClick={() => scrollSuggestions("left")}
                   size="sm"
-                  variant="subtle"
+                  variant="gradient"
+                  gradient={{ from: "blue", to: "cyan" }}
                   radius="xl"
                   style={{
-                    backgroundColor: isDark ? theme.colors.dark[6] : theme.colors.gray[2],
-                    position: "absolute",
-                    left: 0,
-                    zIndex: 10,
-                    boxShadow: "2px 0 6px rgba(0,0,0,0.1)",
+                    boxShadow: theme.shadows.sm,
+                    flexShrink: 0,
                   }}
                 >
-                  <IconChevronLeft size={16} />
+                  <IconChevronLeft size={14} />
                 </ActionIcon>
               )}
 
@@ -1631,35 +1827,50 @@ export default function ChatPanel({
                   flex: 1,
                   overflowX: "auto",
                   scrollBehavior: "smooth",
-                  paddingLeft: showLeftScroll ? 35 : 0,
-                  paddingRight: showRightScroll ? 35 : 0,
                   scrollbarWidth: "none",
+                  msOverflowStyle: "none",
                 }}
               >
-                <Group gap="sm" wrap="nowrap" style={{ minWidth: "fit-content" }}>
+                <Group gap="xs" wrap="nowrap" style={{ minWidth: "fit-content" }}>
                   {suggestions.map((suggestion, index) => (
                     <Button
                       key={index}
                       onClick={() => handleSuggestionClick(suggestion)}
-                      variant="subtle"
-                      size="sm"
+                      variant="light"
+                      size="xs"
+                      radius="lg"
                       style={{
-                        backgroundColor: isDark ? theme.colors.dark[6] : theme.colors.gray[2],
+                        background: isDark
+                          ? `linear-gradient(135deg, ${theme.colors.dark[5]} 0%, ${theme.colors.dark[6]} 100%)`
+                          : `linear-gradient(135deg, ${theme.colors.gray[1]} 0%, ${theme.colors.gray[0]} 100%)`,
                         color: isDark ? theme.colors.gray[3] : theme.colors.gray[7],
-                        padding: "8px 12px",
-                        borderRadius: "8px",
-                        border: `1px solid ${isDark ? theme.colors.dark[5] : theme.colors.gray[3]}`,
+                        padding: "4px 10px",
+                        border: `1px solid ${isDark ? theme.colors.dark[4] : theme.colors.gray[3]}`,
                         whiteSpace: "nowrap",
-                        fontSize: "13px",
-                        fontWeight: 400,
+                        fontSize: "11px",
+                        fontWeight: 500,
                         minWidth: "fit-content",
-                        maxWidth: "250px",
+                        maxWidth: "200px",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         flexShrink: 0,
+                        transition: "all 0.2s ease",
+                        height: "24px",
+                        lineHeight: "1",
+                      }}
+                      styles={{
+                        root: {
+                          "&:hover": {
+                            transform: "translateY(-1px)",
+                            boxShadow: theme.shadows.sm,
+                            background: isDark
+                              ? `linear-gradient(135deg, ${theme.colors.blue[8]} 0%, ${theme.colors.cyan[8]} 100%)`
+                              : `linear-gradient(135deg, ${theme.colors.blue[0]} 0%, ${theme.colors.cyan[0]} 100%)`,
+                          },
+                        },
                       }}
                     >
-                      {suggestion.length > 40 ? `${suggestion.substring(0, 40)}...` : suggestion}
+                      {suggestion.length > 32 ? `${suggestion.substring(0, 32)}...` : suggestion}
                     </Button>
                   ))}
                 </Group>
@@ -1670,27 +1881,35 @@ export default function ChatPanel({
                 <ActionIcon
                   onClick={() => scrollSuggestions("right")}
                   size="sm"
-                  variant="subtle"
+                  variant="gradient"
+                  gradient={{ from: "blue", to: "cyan" }}
                   radius="xl"
                   style={{
-                    backgroundColor: isDark ? theme.colors.dark[6] : theme.colors.gray[2],
-                    position: "absolute",
-                    right: 0,
-                    zIndex: 10,
-                    boxShadow: "-2px 0 6px rgba(0,0,0,0.1)",
+                    boxShadow: theme.shadows.sm,
+                    flexShrink: 0,
                   }}
                 >
-                  <IconChevronRight size={16} />
+                  <IconChevronRight size={14} />
                 </ActionIcon>
               )}
 
-              {/* Source count */}
-              <Text size="xs" c="dimmed" style={{ flexShrink: 0, marginLeft: showRightScroll ? 35 : 0 }}>
-                {suggestions.length} sumber
-              </Text>
+              {/* Enhanced source count - inline */}
+              <Badge
+                variant="light"
+                color="blue"
+                size="xs"
+                style={{
+                  fontSize: "10px",
+                  height: "20px",
+                  flexShrink: 0,
+                  marginLeft: "4px",
+                }}
+              >
+                {suggestions.length}
+              </Badge>
             </Group>
           )}
-        </Paper>
+        </Card>
 
         {/* Hidden file input */}
         <input
@@ -1702,13 +1921,21 @@ export default function ChatPanel({
         />
       </Box>
 
+      {/* Enhanced Modals */}
       <Modal
         opened={modalOpened}
         onClose={() => {
           setModalOpened(false)
           setSelectedPDF(null)
         }}
-        title="Lihat Artikel"
+        title={
+          <Group gap="sm">
+            <ThemeIcon variant="gradient" gradient={{ from: "blue", to: "cyan" }} size="md">
+              <IconCircleDot size={16} />
+            </ThemeIcon>
+            <Text fw={600}>Lihat Artikel</Text>
+          </Group>
+        }
         size="90%"
         padding="sm"
         centered
@@ -1736,7 +1963,6 @@ export default function ChatPanel({
         )}
       </Modal>
 
-      {/* Enhanced Modals */}
       <Modal
         opened={!!detailModalNode}
         onClose={() => {
@@ -1744,7 +1970,7 @@ export default function ChatPanel({
         }}
         title={
           <Group gap="sm">
-            <ThemeIcon variant="light" color="blue" size="md">
+            <ThemeIcon variant="gradient" gradient={{ from: "blue", to: "cyan" }} size="md">
               <IconCircleDot size={16} />
             </ThemeIcon>
             <Box>
@@ -1767,54 +1993,90 @@ export default function ChatPanel({
         />
       </Modal>
 
-      {/* NEW: Annotation Modal */}
+      {/* Enhanced Annotation Modal */}
       <Modal
         opened={showAnnotationModal}
         onClose={() => setShowAnnotationModal(false)}
         title={
           <Group gap="xs">
-            <IconNote size={20} />
+            <ThemeIcon variant="gradient" gradient={{ from: "blue", to: "cyan" }} size="md">
+              <IconNote size={16} />
+            </ThemeIcon>
             <Text fw={600}>Buat Anotasi</Text>
           </Group>
         }
         centered
         overlayProps={{ blur: 3 }}
+        radius="lg"
       >
         <Stack gap="md">
           <Box>
-            <Text size="sm" c="dimmed" mb={4}>
+            <Text size="sm" c="dimmed" mb={8} fw={500}>
               Teks yang dipilih:
             </Text>
-            <Paper p="sm" withBorder radius="sm" bg={isDark ? theme.colors.dark[7] : theme.colors.gray[0]}>
-              <Text size="sm" style={{ fontStyle: "italic" }}>
+            <Card
+              p="md"
+              withBorder
+              radius="md"
+              style={{
+                background: isDark
+                  ? `linear-gradient(135deg, ${theme.colors.dark[7]} 0%, ${theme.colors.dark[8]} 100%)`
+                  : `linear-gradient(135deg, ${theme.colors.gray[0]} 0%, ${theme.colors.gray[1]} 100%)`,
+                border: `1px solid ${isDark ? theme.colors.dark[5] : theme.colors.gray[2]}`,
+              }}
+            >
+              <Text size="sm" style={{ fontStyle: "italic", lineHeight: 1.5 }}>
                 {highlightedText.length > 150 ? `${highlightedText.substring(0, 150)}...` : highlightedText}
               </Text>
-            </Paper>
+            </Card>
           </Box>
+
           <TextInput
             label="Komentar Anda"
             placeholder="Tambahkan komentar untuk anotasi ini..."
             value={annotationCommentInput}
             onChange={(event) => setAnnotationCommentInput(event.currentTarget.value)}
-            
+            styles={{
+              input: {
+                borderRadius: theme.radius.md,
+              },
+            }}
           />
-          <Group justify="flex-end">
-            <Button variant="light" color="gray" onClick={() => setShowAnnotationModal(false)}>
+
+          <Group justify="flex-end" gap="sm">
+            <Button variant="light" color="gray" onClick={() => setShowAnnotationModal(false)} radius="md">
               Batal
             </Button>
             <Button
-              variant="filled"
-              color="blue"
+              variant="gradient"
+              gradient={{ from: "blue", to: "cyan" }}
               onClick={handleSaveAnnotation}
               loading={isSavingAnnotation}
               disabled={!annotationCommentInput.trim()}
               leftSection={<IconCheck size={16} />}
+              radius="md"
             >
               Simpan Anotasi
             </Button>
           </Group>
         </Stack>
       </Modal>
+
+      {/* Add CSS animations */}
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        
+        @keyframes bounce {
+          0%, 80%, 100% { 
+            transform: scale(0);
+          } 40% { 
+            transform: scale(1.0);
+          }
+        }
+      `}</style>
     </Box>
   )
 }
