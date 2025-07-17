@@ -23,6 +23,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     let fileBuffer: Buffer;
     let uploadFileName = "";
     let originalFileName = "";
+    let author = "";
+    let year = "";
+    let abstract = "";
+    let keywords = "";
+    let doi = "";
 
     const chunks: Buffer[] = [];
 
@@ -71,6 +76,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         title = val;
       } if (fieldname === "sessionId") {
         sessionId = val;
+      } if (fieldname === "author"){
+        author = val;
+      } if (fieldname === "year"){
+        year = val;
+      } if (fieldname === "abstract"){
+        abstract = val;
+      } if (fieldname === "keywords"){
+        keywords = val;
+      } if (fieldname === "doi"){
+        doi = val;
       }
     });
 
@@ -137,6 +152,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             filePath: publicUrl,
             userId: userId,
             sessionId: sessionId || null,
+            author: author || null,
+            year: year || null,
+            abstract: abstract || null,
+            keywords: keywords || null,
+            doi: doi || null,
             // createdAt: new Date(),
           },
         });
