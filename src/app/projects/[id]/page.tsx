@@ -1028,6 +1028,14 @@ export default function Home() {
     formData.append('file', selectedFile);
     formData.append('title', selectedFile.name); // Gunakan nama file, bukan form title
     formData.append('sessionId', sessionId as string);
+    formData.append('author', uploadForm.author);
+    formData.append('year', uploadForm.year);
+    formData.append('abstract', uploadForm.abstract);
+    formData.append('keywords', uploadForm.keywords);
+    formData.append('doi', uploadForm.doi);
+
+    //for ris
+    // formData.append('', sele)
 
     setUpLoading(true);
     try {
