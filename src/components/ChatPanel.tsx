@@ -504,7 +504,9 @@ export default function ChatPanel({
     setShowSuggestions(false)
     setSuggestionContext(null)
 
-    const contextNodeIds = contextNodes.filter((node) => node && node.id).map((node) => String(node.id))
+    const contextNodeIds = contextNodes.filter((node) => node && node.id).map((node) => String(node.id));
+
+    const contextEdgeIds = contextEdges.filter((edge) => edge && edge.id).map((edge) => String(edge.id));
 
     setMessages((prev) => [...prev, { sender: "user", text: input, contextNodeIds: contextNodeIds }])
     setShouldScrollToBottom(true) // Ensure scroll to bottom for new messages
@@ -585,7 +587,7 @@ export default function ChatPanel({
         })
       }
 
-      setMessages((m) => [...m, { sender: "ai", text: data.answer, references: processedReferences || [] }])
+      setMessages((m) => [...m, { sender: "ai", text: data.answer, references: processedReferences || [], contextNodeIds: contextNodeIds, contextEdgeIds: contextEdgeIds }])
 
       setTimeout(async () => {
         await fetchFollowupSuggestions(data.answer)
@@ -1078,6 +1080,18 @@ export default function ChatPanel({
     const messageContentElement = targetElement.closest(".ai-message-content")
     if (!messageContentElement || !messageContentElement.contains(selection.getRangeAt(0).commonAncestorContainer)) {
       setShowAnnotationModal(false)
+      return
+    }
+
+    if (!message.contextNodeIds || message.contextNodeIds.length === 0) {
+      notifications.show({
+        title: "Anotasi Tidak Tersedia",
+        message: "Anotasi hanya tersedia untuk respons AI yang berdasarkan dokumen yang dilampirkan.",
+        color: "yellow",
+        position: "top-right",
+      })
+      // Clear selection to prevent re-triggering
+      selection.empty()
       return
     }
 
@@ -1585,29 +1599,29 @@ export default function ChatPanel({
                                 </Text>
                               </Group>
                               <Stack gap={6}>
-                                {Array.from(
-                                  new Map(msg.references?.map((ref) => [`${ref.url}-${ref.ref_mark}`, ref])).values(),
-                                ).map((ref, idx) => (
-                                  <Group key={`${ref.url}-${ref.ref_mark}`} gap={8} align="flex-start">
-                                    <Badge size="xs" variant="light" color="blue">
-                                      {ref.ref_mark}
-                                    </Badge>
-                                    <Anchor
-                                      href="#"
-                                      size="xs"
-                                      style={{
-                                        wordBreak: "break-all",
-                                        lineHeight: 1.4,
-                                      }}
-                                      onClick={(e) => {
-                                        e.preventDefault()
-                                        handlerOpenPdf(ref.url)
-                                      }}
-                                    >
-                                      {ref.text}
-                                    </Anchor>
-                                  </Group>
-                                ))}
+                                {msg.references
+                                  ?.sort((a, b) => (a.index ?? 999) - (b.index ?? 999)) // Sort by the 'index' property
+                                  .map((ref, idx) => (
+                                    <Group key={`${ref.text.toLowerCase().trim()}-${idx}`} gap={8} align="flex-start">
+                                      <Badge size="xs" variant="light" color="blue">
+                                        {ref.ref_mark}
+                                      </Badge>
+                                      <Anchor
+                                        href="#"
+                                        size="xs"
+                                        style={{
+                                          wordBreak: "break-all",
+                                          lineHeight: 1.4,
+                                        }}
+                                        onClick={(e) => {
+                                          e.preventDefault()
+                                          handlerOpenPdf(ref.url)
+                                        }}
+                                      >
+                                        {ref.text}
+                                      </Anchor>
+                                    </Group>
+                                  ))}
                               </Stack>
                             </Card>
                           )}
