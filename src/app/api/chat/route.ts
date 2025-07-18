@@ -70,6 +70,28 @@ export async function POST(req: NextRequest, res: NextResponse){
         promptGeneral = `Pertanyaan umum: ${question}`;
     };
 
+let articleIdsForVectorDB: string[] = []; 
+    
+    // contextNodeIds yang diterima dari frontend adalah ID Node Prisma dan TETAP AKAN DIKIRIM APA ADANYA KE PYTHON
+    // untuk digunakan oleh GraphDB.
+    // Kita hanya perlu mengambil ArticleId yang TERKAIT dengan NodeId tersebut.
+
+    // 1. Jika ada contextNodeIds (dari graf di frontend), ambil articleId yang terkait
+    if (contextNodeIds && contextNodeIds.length > 0) {
+        const nodesWithArticleId = await prisma.node.findMany({
+            where: {
+                id: {
+                    in: contextNodeIds, // Gunakan contextNodeIds yang ada
+                },
+            },
+            select: {
+                articleId: true, // Hanya ambil articleId
+            },
+        });
+        // Pastikan tidak ada duplikat dan hanya ambil string yang valid
+        articleIdsForVectorDB = [...new Set(nodesWithArticleId.map(node => node.articleId).filter((id): id is string => id !== null))];
+    }
+
     let answer: any;
     if(thereIsNode){
 
@@ -109,6 +131,7 @@ export async function POST(req: NextRequest, res: NextResponse){
                         node_id: nodeId,
                         node_ids: nodeIds,
                         context_node_ids: contextNodeIds,
+                        context_article_ids: articleIdsForVectorDB,
                         context_edge_ids: contextEdgeIds,
                         force_web: forceWeb
                     }
