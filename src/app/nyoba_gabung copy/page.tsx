@@ -1,6 +1,9 @@
 "use client"
 
-import '@mantine/tiptap/styles.css';
+import dynamic from 'next/dynamic';
+const BlockNoteEditorComponent = dynamic(() => import('@/components/BlockNoteEditor'), {
+    ssr: false
+});
 import cx from 'clsx';
 import NextImage from 'next/image';
 import {
@@ -50,22 +53,12 @@ import {
    IconUser,
    IconLogout,
   } from "@tabler/icons-react";
-import classes from '../../../container.module.css';
-import myimage from '../../../imageCollection/LogoSRE_Fix.png';
-import knowledgeImage from '../../../imageCollection/graph.png';
+import classes from '../container.module.css';
+import myimage from '../imageCollection/LogoSRE_Fix.png';
+import knowledgeImage from '../imageCollection/graph.png';
 import { useState, useEffect } from 'react';
-
-import { RichTextEditor, Link } from '@mantine/tiptap';
-import { useEditor } from '@tiptap/react';
-import Highlight from '@tiptap/extension-highlight';
-import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
-import TextAlign from '@tiptap/extension-text-align';
-import Superscript from '@tiptap/extension-superscript';
-import SubScript from '@tiptap/extension-subscript';
-import { Heading } from '@tiptap/extension-heading';
-import { Plugin } from 'prosemirror-state';
 import Split from 'react-split';
+
 import { useParams, useRouter } from 'next/navigation';
 
 interface Article {
@@ -124,70 +117,19 @@ export default function Home() {
     setColorScheme(computedColorScheme === "dark" ? "light" : "dark");
 
   const [activeTab, setActiveTab] = useState("knowledge");
-
   const isMobile = useMediaQuery('(max-width: 768px)');
-
   const [fileName, setFileName] = useState("Judul Artikel 1");
+  const [headings, setHeadings] = useState<Array<{ id: string; text: string; level: number }>>([]);
 
-  const [headings, setHeadings] = useState<Array<{ id: string; text: string }>>([]);
-
+  const sendMessage = () => {
+    if (chatInput.trim() === '') return;
+    setMessages((prev) => [...prev, chatInput]);
+    setChatInput('');
+  };
   //for article
   const [article, setArticle] = useState<Article[]>([]);
   const [mounted, setMounted] = useState(false);
-
-  const HeadingWithId = Heading.extend({
-    addAttributes() {
-      return {
-        ...this.parent?.(),
-        id: {
-          default: null,
-          parseHTML: (element) => element.getAttribute('id'),
-          renderHTML: (attributes) => {
-            return { id: attributes.id };
-          },
-        },
-      };
-    },
-    addProseMirrorPlugins() {
-      return [
-        new Plugin({
-          appendTransaction(transactions, oldState, newState) {
-            const tr = newState.tr;
-            const seenIds = new Set<string>();
-
-            newState.doc.descendants((node, pos) => {
-              if (node.type.name === 'heading') {
-                let id = node.attrs.id;
-                if (!id || seenIds.has(id)) {
-                  id = `heading-${Math.random().toString(36).substr(2, 9)}`;
-                  tr.setNodeMarkup(pos, undefined, {
-                    ...node.attrs,
-                    id,
-                  });
-                }
-                seenIds.add(id);
-              }
-            });
-
-            return tr.docChanged ? tr : null;
-          },
-        }),
-      ];
-    },
-  });
   
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      HeadingWithId,
-      Underline,
-      Link,
-      Superscript,
-      SubScript,
-      Highlight,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
-    ],
-  });
 
   const handleLogout = async () => {
     const res = await fetch('/api/auth/signout',{
@@ -206,39 +148,6 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    if (!editor) return;
-
-    const updateHeadings = () => {
-      const nodes: { id: string; text: string }[] = [];
-      editor.state.doc.descendants((node) => {
-        if (node.type.name === "heading" && node.attrs.id) {
-          nodes.push({
-            id: node.attrs.id,
-            text: node.textContent,
-          });
-        }
-      });
-      setHeadings(nodes);
-    };
-
-    editor.on("update", updateHeadings);
-    updateHeadings(); // initial call
-
-    // Cleanup function
-    return () => {
-      editor.off("update", updateHeadings);
-    };
-  }, [editor]);
-
-  const [chatInput, setChatInput] = useState("");
-  const [messages, setMessages] = useState<string[]>([]);
-
-  const sendMessage = () => {
-    if (chatInput.trim() === "") return;
-    setMessages((prev) => [...prev, chatInput]);
-    setChatInput("");
-  };
 
   const getArticle = async () => {
       const res = await fetch(`/api/nodes?sessionId=${sessionId}`);
@@ -280,6 +189,74 @@ export default function Home() {
     fetchDropdownUser();
   }, []);
 
+
+  // Enhanced headings state dengan level
+  const [chatInput, setChatInput] = useState('');
+  const [messages, setMessages] = useState<string[]>([]);
+  const [editorContent, setEditorContent] = useState<any[]>([]);
+
+    const handleContentChange = (content: any[]) => {
+        setEditorContent(content);
+
+        // Extract headings from BlockNote content dengan level
+        const extractedHeadings: { id: string; text: string; level: number }[] = [];
+        let firstH1Title = '';
+        let hasAnyContent = false;
+        
+        content.forEach((block) => {
+        // Check if ada content apapun
+        if (block.content && block.content.length > 0) {
+            const hasText = block.content.some((item: any) => {
+            const text = typeof item === 'string' ? item : (item.text || '');
+            return text.trim().length > 0;
+            });
+            if (hasText) {
+            hasAnyContent = true;
+            }
+        }
+        
+        if (block.type === 'heading' && block.content?.length > 0) {
+            const text = block.content.map((item: any) => item.text || '').join('');
+            if (text.trim()) {
+            const level = block.props?.level || 1;
+            
+            extractedHeadings.push({
+                id: block.id || `heading-${Math.random().toString(36).substr(2, 9)}`,
+                text: text.trim(),
+                level: level,
+            });
+            
+            // Auto-update fileName dengan H1 pertama yang ditemukan
+            if (level === 1 && !firstH1Title) {
+                firstH1Title = text.trim();
+            }
+            }
+        }
+        });
+        
+        setHeadings(extractedHeadings);
+        
+        // Logic untuk update/reset title
+        if (!hasAnyContent) {
+        // Jika editor benar-benar kosong, reset title
+        setFileName('📝 Tidak ada judul');
+        } else if (firstH1Title && firstH1Title !== fileName) {
+        // Jika ada H1, update dengan H1 tersebut
+        setFileName(firstH1Title);
+        }
+        // Jika ada content tapi tidak ada H1, biarkan title yang ada
+    };
+
+    const handleSaveDraft = () => {
+        console.log('Draft:', editorContent);
+        alert('Draft disimpan!');
+    };
+
+    const handleSaveFinal = () => {
+        console.log('Final:', editorContent);
+        alert('Artikel final disimpan!');
+    };
+
   return (
     <AppShell
       header={{ height: 90 }}
@@ -289,7 +266,7 @@ export default function Home() {
         style={{
           backgroundColor:
               computedColorScheme === "dark" ? "#1a1b1e" : "white",
-            borderBottom: "1px solid #e0e0e0",
+            borderBottom: `1px solid ${computedColorScheme === 'dark' ? '#2a2a2a' : '#e0e0e0'}`,
             paddingLeft: rem(16),
             paddingRight: rem(16),
         }}
@@ -420,23 +397,21 @@ export default function Home() {
             direction={isMobile ? "column" : "row"}
             justify="space-between"
             align="stretch"
-            // style={{ height: isMobile ? "auto" : "calc(100vh - 90px)" }}
             style={{ height: "100%", flexGrow: 1}}
             gap="md"
           >
             {/* Panel Kiri */}
             <Box
               style={{
-                // width: isMobile ? "100%" : "20%",
-                width: "20%",
-                border: "1px solid #ccc",
-                borderRadius: "8px",
-                backgroundColor: computedColorScheme === "dark" ? "#2a2a2a" : "#f9f9f9",
-                padding: "12px",
-                display: "flex",
-                flexDirection: "column",
-                maxHeight: "calc(100vh - 140px)", // sama dengan panel tengah dan kanan
-                overflowY: "auto",
+                width: '20%',
+                border: '1px solid #ccc',
+                borderRadius: '8px',
+                backgroundColor: computedColorScheme === 'dark' ? '#2a2a2a' : '#f9f9f9',
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                maxHeight: 'calc(100vh - 140px)',
+                overflowY: 'auto',
               }}
             >
               <Text size="xs" fw={600} c="dimmed" mb="sm" ml="sm">
@@ -450,38 +425,135 @@ export default function Home() {
                 styles={{
                   input: {
                     fontWeight: 600,
-                    fontSize: "17px",
-                    padding: "6px 12px",
-                    borderRadius: "20px",
-                    backgroundColor: computedColorScheme === "dark" ? "#007BFF" : "#007BFF",
-                    marginBottom: "12px",
+                    fontSize: '17px',
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    backgroundColor: computedColorScheme === 'dark' ? '#007BFF' : '#007BFF',
+                    marginBottom: '12px',
+                    color: 'white',
                   },
                 }}
               />
 
-              {/* Daftar heading hasil ketikan user */}
+              {/* Enhanced Daftar heading dengan navigation dan level */}
               <Stack ml="sm" gap={8}>
-                {headings.map(({ id, text }) => (
-                  <Text
-                    key={id}
-                    size="sm"
-                    style={{ cursor: "pointer" }}
-                    onClick={() => {
-                      const element = document.getElementById(id);
-                      if (element) {
-                        element.scrollIntoView({ behavior: "smooth", block: "start" });
+                {headings.length === 0 ? (
+                  <Box ta="center" py="md">
+                    <Text size="xs" c="dimmed" mb="xs">
+                      Outline artikel akan muncul di sini
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      Gunakan AI untuk membuat konten dengan heading
+                    </Text>
+                  </Box>
+                ) : (
+                  headings.map(({ id, text, level }) => {
+                    // Get icon berdasarkan level
+                    const getHeadingIcon = () => {
+                      switch(level) {
+                        case 1: return '📝';
+                        case 2: return '📌';
+                        case 3: return '🔸';
+                        case 4: return '▪️';
+                        default: return '•';
                       }
-                    }}
-                  >
-                    {text}
-                  </Text>
-                ))}
+                    };
+                    
+                    // Get indentation berdasarkan level
+                    const getIndentation = () => {
+                      return (level - 1) * 12;
+                    };
+                    
+                    // Get color berdasarkan level
+                    const getTextColor = () => {
+                      switch(level) {
+                        case 1: return '#1971c2';
+                        case 2: return '#2f9e44';
+                        case 3: return '#f76707';
+                        case 4: return '#7048e8';
+                        default: return '#495057';
+                      }
+                    };
+
+                    return (
+                      <Group
+                        key={id}
+                        gap="xs"
+                        p="xs"
+                        style={{ 
+                          cursor: 'pointer',
+                          marginLeft: getIndentation(),
+                          borderRadius: 6,
+                          transition: 'all 0.2s ease',
+                          border: '1px solid transparent',
+                        }}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-blue-200"
+                        onClick={() => {
+                          // Enhanced scroll function
+                          try {
+                            // Method 1: Cari berdasarkan block ID
+                            const blockElement = document.querySelector(`[data-id="${id}"]`) as HTMLElement;
+                            if (blockElement) {
+                              blockElement.scrollIntoView({ 
+                                behavior: 'smooth', 
+                                block: 'center' 
+                              });
+                              
+                              // Highlight sementara
+                              blockElement.style.background = 'rgba(59, 130, 246, 0.1)';
+                              blockElement.style.borderLeft = '4px solid #3b82f6';
+                              blockElement.style.borderRadius = '0 8px 8px 0';
+                              setTimeout(() => {
+                                blockElement.style.background = '';
+                                blockElement.style.borderLeft = '';
+                                blockElement.style.borderRadius = '';
+                              }, 2000);
+                              return;
+                            }
+                            
+                            // Method 2: Fallback ke method lama
+                            const element = document.getElementById(id) as HTMLElement;
+                            if (element) {
+                              element.scrollIntoView({ 
+                                behavior: 'smooth', 
+                                block: 'start' 
+                              });
+                            }
+                          } catch (error) {
+                            console.error('Error scrolling to heading:', error);
+                          }
+                        }}
+                      >
+                        <Text size="xs" style={{ minWidth: 16 }}>
+                          {getHeadingIcon()}
+                        </Text>
+                        <Text
+                          size="sm"
+                          fw={level <= 2 ? 600 : 500}
+                          style={{
+                            color: getTextColor(),
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            flex: 1,
+                          }}
+                          title={text}
+                        >
+                          {text}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          H{level}
+                        </Text>
+                      </Group>
+                    );
+                  })
+                )}
               </Stack>
             </Box>
 
             <Split
               className="split"
-              sizes={[70, 30]} // persen ukuran awal
+              sizes={[70, 30]}
               minSize={300}
               expandToMin={false}
               gutterSize={10}
@@ -492,114 +564,68 @@ export default function Home() {
               cursor="col-resize"
               style={{ display: 'flex', width: '100%' }}
             >
-              {/* Panel Tengah */}
-              <Box
+            {/* Panel Tengah */}
+            
+            <Box
                 style={{
-                  width: isMobile ? "100%" : "60%",
-                  border: "1px solid #ccc",
-                  borderRadius: "8px",
-                  backgroundColor: computedColorScheme === "dark" ? "#2a2a2a" : "#f9f9f9",
-                  padding: "10px",
+                  width: isMobile ? '100%' : '60%',
+                  border: '1px solid #ccc',
+                  borderRadius: '8px',
+                  backgroundColor: computedColorScheme === 'dark' ? '#2a2a2a' : '#f9f9f9',
+                  padding: '10px',
                   flexGrow: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  overflow: "hidden", // agar kontennya tidak keluar
-                  maxHeight: "calc(100vh - 140px)",
-                  height: "100%", 
-                  minHeight: "100%",
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  maxHeight: 'calc(100vh - 140px)',
+                  height: '100%',
+                  minHeight: '100%',
                 }}
               >
-                <RichTextEditor editor={editor} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                  <RichTextEditor.Toolbar sticky stickyOffset={0}>
-                    <RichTextEditor.ControlsGroup>
-                      <RichTextEditor.Bold />
-                      <RichTextEditor.Italic />
-                      <RichTextEditor.Underline />
-                      <RichTextEditor.Strikethrough />
-                      <RichTextEditor.ClearFormatting />
-                      <RichTextEditor.Highlight />
-                      <RichTextEditor.Code />
-                    </RichTextEditor.ControlsGroup>
+                {/* BlockNote Editor Component dengan AI Indonesia */}
+                <BlockNoteEditorComponent
+                  onContentChange={handleContentChange}
+                  style={{
+                    flex: 1,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                />
 
-                    <RichTextEditor.ControlsGroup>
-                      <RichTextEditor.H1 />
-                      <RichTextEditor.H2 />
-                      <RichTextEditor.H3 />
-                      <RichTextEditor.H4 />
-                    </RichTextEditor.ControlsGroup>
-
-                    <RichTextEditor.ControlsGroup>
-                      <RichTextEditor.Blockquote />
-                      <RichTextEditor.Hr />
-                      <RichTextEditor.BulletList />
-                      <RichTextEditor.OrderedList />
-                      <RichTextEditor.Subscript />
-                      <RichTextEditor.Superscript />
-                    </RichTextEditor.ControlsGroup>
-
-                    <RichTextEditor.ControlsGroup>
-                      <RichTextEditor.Link />
-                      <RichTextEditor.Unlink />
-                    </RichTextEditor.ControlsGroup>
-
-                    <RichTextEditor.ControlsGroup>
-                      <RichTextEditor.AlignLeft />
-                      <RichTextEditor.AlignCenter />
-                      <RichTextEditor.AlignJustify />
-                      <RichTextEditor.AlignRight />
-                    </RichTextEditor.ControlsGroup>
-
-                    <RichTextEditor.ControlsGroup>
-                      <RichTextEditor.Undo />
-                      <RichTextEditor.Redo />
-                    </RichTextEditor.ControlsGroup>
-                  </RichTextEditor.Toolbar>
-                  <ScrollArea style={{ flex: 1 }}>
-                    <RichTextEditor.Content 
-                      style={{
-                        flex: 1,
-                        overflowY: "auto", // ini yang penting untuk scroll konten
-                        paddingRight: 10,
-                      }}
-                    />
-                  </ScrollArea>
-                </RichTextEditor>
+                {/* Action Buttons */}
                 <Group justify="flex-end" mt="sm" gap="md">
-                  <Button
-                    variant="outline"
-                    color="gray"
-                    leftSection={<IconFilePlus size={18} />}
-                    radius="md"
-                    size="md"
-                    px={24}
-                    onClick={() => {
-                      const html = editor?.getHTML();
-                      const text = editor?.getText();
-                      console.log("Draft:", html);
-                      alert("Draft disimpan!");
+                  <Button 
+                    variant="outline" 
+                    color="gray" 
+                    leftSection={<IconFilePlus size={18} />} 
+                    radius="md" 
+                    size="md" 
+                    px={24} 
+                    onClick={handleSaveDraft}
+                    style={{
+                      transition: 'all 0.2s ease',
                     }}
                   >
                     Simpan Draf
                   </Button>
 
-                  <Button
-                    variant="filled"
-                    color="blue"
-                    leftSection={<IconUpload size={18} />}
-                    radius="md"
-                    size="md"
-                    px={24}
-                    onClick={() => {
-                      const html = editor?.getHTML();
-                      const text = editor?.getText();
-                      console.log("Final:", html);
-                      alert("Artikel final disimpan!");
+                  <Button 
+                    variant="filled" 
+                    color="blue" 
+                    leftSection={<IconUpload size={18} />} 
+                    radius="md" 
+                    size="md" 
+                    px={24} 
+                    onClick={handleSaveFinal}
+                    style={{
+                      transition: 'all 0.2s ease',
                     }}
                   >
                     Simpan Final
                   </Button>
                 </Group>
-              </Box>
+              </Box>    
 
               {/* Panel Kanan */}
               <Box

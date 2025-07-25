@@ -77,3 +77,378 @@ a {
   cursor: col-resize;
   width: 8px;
 }
+
+/* Enhanced BlockNote Editor Styling */
+
+/* Smooth scrolling untuk editor */
+.bn-container {
+  height: 100%;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.bn-editor {
+  min-height: 100%;
+  padding: 20px;
+  max-width: none;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Custom scrollbar */
+.bn-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bn-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bn-container::-webkit-scrollbar-thumb {
+  background: #c1c2c5;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.bn-container::-webkit-scrollbar-thumb:hover {
+  background: #868e96;
+}
+
+[data-mantine-color-scheme="dark"] .bn-container::-webkit-scrollbar-thumb {
+  background: #5c5f66;
+}
+
+[data-mantine-color-scheme="dark"] .bn-container::-webkit-scrollbar-thumb:hover {
+  background: #6c737a;
+}
+
+/* BlockNote content styling */
+.bn-block-content {
+  line-height: 1.6;
+  font-size: 16px;
+}
+
+/* Better paragraph spacing */
+.bn-block-content p {
+  margin-bottom: 0.5em;
+}
+
+/* Enhanced heading styles untuk visual hierarchy */
+.bn-block-content h1,
+.bn-block-content h2,
+.bn-block-content h3 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+
+.bn-block-content h1 {
+  font-size: 2rem;
+  color: #1971c2;
+  border-bottom: 2px solid #e3f2fd;
+  padding-bottom: 0.5rem;
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
+  font-weight: 700;
+}
+
+.bn-block-content h2 {
+  font-size: 1.5rem;
+  color: #2f9e44;
+  margin-top: 1.3em;
+  margin-bottom: 0.6em;
+  font-weight: 600;
+}
+
+.bn-block-content h3 {
+  font-size: 1.25rem;
+  color: #f76707;
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+
+.bn-block-content h4 {
+  font-size: 1.1rem;
+  color: #7048e8;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+  font-weight: 600;
+}
+
+.bn-block-content h5,
+.bn-block-content h6 {
+  font-size: 1rem;
+  color: #495057;
+  margin-top: 0.8em;
+  margin-bottom: 0.3em;
+  font-weight: 600;
+}
+
+/* Dark mode heading colors */
+[data-mantine-color-scheme="dark"] .bn-block-content h1 {
+  color: #74c0fc;
+  border-bottom-color: #1864ab;
+}
+
+[data-mantine-color-scheme="dark"] .bn-block-content h2 {
+  color: #69db7c;
+}
+
+[data-mantine-color-scheme="dark"] .bn-block-content h3 {
+  color: #ffa94d;
+}
+
+[data-mantine-color-scheme="dark"] .bn-block-content h4 {
+  color: #b197fc;
+}
+
+[data-mantine-color-scheme="dark"] .bn-block-content h5,
+[data-mantine-color-scheme="dark"] .bn-block-content h6 {
+  color: #ced4da;
+}
+
+/* Block hover effects */
+.bn-block:hover .bn-block-handle {
+  opacity: 1;
+}
+
+.bn-block-handle {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* Slash menu styling */
+.bn-suggestion-menu {
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e9ecef;
+  overflow: hidden;
+}
+
+[data-mantine-color-scheme="dark"] .bn-suggestion-menu {
+  border-color: #373a40;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.bn-suggestion-menu-item {
+  padding: 12px 16px;
+  transition: all 0.2s ease;
+  border-radius: 8px;
+  margin: 4px;
+}
+
+.bn-suggestion-menu-item:hover {
+  background: #f8f9fa;
+  transform: translateX(4px);
+}
+
+[data-mantine-color-scheme="dark"] .bn-suggestion-menu-item:hover {
+  background: #2e3036;
+}
+
+/* Styling untuk semua slash menu items */
+.bn-suggestion-menu-item[data-group="Headings"],
+.bn-suggestion-menu-item[data-group="Lists"],
+.bn-suggestion-menu-item[data-group="Basic blocks"],
+.bn-suggestion-menu-item[data-group="AI"] {
+  background: transparent;
+  border: none;
+  position: relative;
+  overflow: hidden;
+  font-weight: 500;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bn-suggestion-menu-item[data-group="Headings"]:hover,
+.bn-suggestion-menu-item[data-group="Lists"]:hover,
+.bn-suggestion-menu-item[data-group="Basic blocks"]:hover,
+.bn-suggestion-menu-item[data-group="AI"]:hover {
+  background: #f8f9fa;
+  transform: translateX(4px);
+  box-shadow: none;
+}
+
+[data-mantine-color-scheme="dark"] .bn-suggestion-menu-item[data-group="Headings"],
+[data-mantine-color-scheme="dark"] .bn-suggestion-menu-item[data-group="Lists"],
+[data-mantine-color-scheme="dark"] .bn-suggestion-menu-item[data-group="Basic blocks"],
+[data-mantine-color-scheme="dark"] .bn-suggestion-menu-item[data-group="AI"] {
+  color: #ced4da;
+}
+
+[data-mantine-color-scheme="dark"] .bn-suggestion-menu-item[data-group="Headings"]:hover,
+[data-mantine-color-scheme="dark"] .bn-suggestion-menu-item[data-group="Lists"]:hover,
+[data-mantine-color-scheme="dark"] .bn-suggestion-menu-item[data-group="Basic blocks"]:hover,
+[data-mantine-color-scheme="dark"] .bn-suggestion-menu-item[data-group="AI"]:hover {
+  background: #2e3036;
+}
+
+/* IconSparkles khusus untuk grup AI */
+.bn-suggestion-menu-item[data-group="AI"]::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .963L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z'/%3E%3Cpath d='M20 3v4'/%3E%3Cpath d='M22 5h-4'/%3E%3Cpath d='M4 17v2'/%3E%3Cpath d='M5 18H3'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Dark mode version */
+[data-mantine-color-scheme="dark"] .bn-suggestion-menu-item[data-group="AI"]::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b5cf6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .963L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z'/%3E%3Cpath d='M20 3v4'/%3E%3Cpath d='M22 5h-4'/%3E%3Cpath d='M4 17v2'/%3E%3Cpath d='M5 18H3'/%3E%3C/svg%3E");
+}
+
+/* Heading navigation hover effects */
+.heading-nav-item {
+  transition: all 0.2s ease;
+  border-radius: 6px;
+  padding: 8px;
+  margin: 2px 0;
+}
+
+.heading-nav-item:hover {
+  background: rgba(59, 130, 246, 0.05);
+  border-left: 3px solid #3b82f6;
+  padding-left: 12px;
+  margin-left: -4px;
+  transform: translateX(2px);
+}
+
+/* Content insertion animation */
+@keyframes contentInsert {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+    background: rgba(59, 130, 246, 0.1);
+  }
+  50% {
+    background: rgba(59, 130, 246, 0.05);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    background: transparent;
+  }
+}
+
+.bn-block[data-newly-inserted="true"] {
+  animation: contentInsert 0.8s ease-out;
+}
+
+/* AI loading animation enhancement */
+.ai-thinking {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Scroll highlight effect untuk heading yang dipilih */
+.heading-highlight {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-left: 4px solid #3b82f6 !important;
+  border-radius: 0 8px 8px 0 !important;
+  transition: all 0.3s ease !important;
+}
+
+/* Enhanced AI modal styling */
+.ai-modal .mantine-Modal-content {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.ai-modal .mantine-Modal-header {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: 2px solid #dee2e6;
+  padding: 20px 24px;
+}
+
+[data-mantine-color-scheme="dark"] .ai-modal .mantine-Modal-header {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+  border-bottom-color: #404040;
+}
+
+/* AI template cards enhancement */
+.ai-template-card {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.ai-template-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  transition: left 0.6s;
+}
+
+.ai-template-card:hover::before {
+  left: 100%;
+}
+
+.ai-template-card:hover {
+  transform: translateY(-4px) scale(1.03);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Enhanced hover effects untuk outline navigation */
+.hover\:bg-gray-50:hover {
+  background-color: rgba(249, 250, 251, 0.8);
+}
+
+.dark .hover\:bg-gray-800:hover {
+  background-color: rgba(31, 41, 55, 0.8);
+}
+
+.hover\:border-blue-200:hover {
+  border-color: rgb(191, 219, 254);
+}
+
+/* Focus Enhancement */
+.bn-editor:focus-within {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+}
+
+/* Selection Styling */
+.bn-block-content ::selection {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+[data-mantine-color-scheme="dark"] .bn-block-content ::selection {
+  background: rgba(59, 130, 246, 0.4);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .bn-editor {
+    padding: 16px;
+  }
+  
+  .bn-block-content {
+    font-size: 15px;
+  }
+  
+  .bn-suggestion-menu {
+    border-radius: 8px;
+  }
+  
+  .ai-template-card {
+    min-height: 100px;
+  }
+}

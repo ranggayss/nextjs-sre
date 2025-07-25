@@ -60,36 +60,6 @@ export async function signUp({
     }
   })
 
-  /*
-  if (error) {
-    alert(error.message); // tampilkan pesan error
-    console.error("Auth error:", error.message);
-    return;
-  }
-
-  const userId = data.user?.id;
-  */
-
-  // Simpan data tambahan ke tabel `user`
-//   const { error: insertError } = await supabase.from("User").insert([
-//     {
-//       id: userId,
-//         email,
-//         name: fullName,
-//         nim: sid,
-//         group,
-//         role: group === "A" ? "group-a" : "group-b",
-//         password,
-//         updateAt: new Date().toISOString(), // Wajib jika NOT NULL
-//     },
-//   ]);
-
-//   if (insertError) {
-//     console.error("Insert DB error:", insertError.message);
-//     throw new Error("Failed to save additional user data.");
-//   }
-
-  // Redirect ke halaman home sesuai grup
   if (group === "A") {
     redirect("../home-a");
   } else {

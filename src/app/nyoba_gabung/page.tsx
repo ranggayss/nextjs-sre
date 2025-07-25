@@ -1,13 +1,9 @@
 "use client"
 
 import dynamic from 'next/dynamic';
-import { useState, useEffect, useRef, useMemo } from 'react';
-import type { BlockNoteEditorRef } from '../../../../components/BlockNoteEditor';
-
-const BlockNoteEditorComponent = dynamic(() => import("../../../../components/BlockNoteEditor"), {
-  ssr: false
+const BlockNoteEditorComponent = dynamic(() => import('@/components/BlockNoteEditor'), {
+    ssr: false
 });
-
 import cx from 'clsx';
 import NextImage from 'next/image';
 import {
@@ -35,7 +31,7 @@ import {
   Paper,
   Badge,
   Divider,
-  Loader,
+
 } from "@mantine/core";
 
 import {useDisclosure, useDebouncedCallback, useMediaQuery} from "@mantine/hooks";
@@ -67,9 +63,10 @@ import {
    IconDotsVertical,
 
   } from "@tabler/icons-react";
-import classes from '../../../container.module.css';
-import myimage from '../../../imageCollection/LogoSRE_Fix.png';
-import knowledgeImage from '../../../imageCollection/graph.png';
+import classes from '../container.module.css';
+import myimage from '../imageCollection/LogoSRE_Fix.png';
+import knowledgeImage from '../imageCollection/graph.png';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Split from 'react-split';
 
 import { useParams, useRouter } from 'next/navigation';
@@ -193,8 +190,6 @@ export default function Home() {
     setMessages((prev) => [...prev, chatInput]);
     setChatInput('');
   };
-
-  const [searchQuery, setSearchQuery] = useState("");
 
   const filteredArticles = article.filter(
     (item) =>
@@ -610,8 +605,6 @@ export default function Home() {
       .join("\n\n");
   };
 
-  const editorRef = useRef<BlockNoteEditorRef>(null);
-
   const addArticleToBibliography = (articleItem: Article) => {
     // Cek apakah artikel sudah ada dalam daftar pustaka
     const existingBibliography = bibliographyListRef.current.find(
@@ -620,7 +613,7 @@ export default function Home() {
 
     if (existingBibliography) {
       // Jika sudah ada, insert nomor sitasinya saja
-      editorRef.current?.insertCitation?.(`[${existingBibliography.number}]`);
+      insertCitationNumber(existingBibliography.number);
       return;
     }
 
@@ -638,8 +631,7 @@ export default function Home() {
     };
 
     setBibliographyList((prev) => [...prev, newBibliography]);
-    editorRef.current?.insertCitation?.(`[${nextNumber}]`);
-    setNextNumber((n) => n + 1);
+    insertCitationNumber(nextNumber);
   };
 
   /**
@@ -656,17 +648,6 @@ export default function Home() {
     }
   };
 
-  const convertEditorContentToPlainText = (blocks: any[]): string => {
-    return blocks
-      .map((block) =>
-        (block.content || [])
-          .map((item: any) => (typeof item === 'string' ? item : item.text || ''))
-          .join('')
-      )
-      .join('\n\n')
-      .trim();
-  };
-  
   /**
    * Fungsi untuk menyimpan artikel final dengan pengecekan AI
    */
@@ -674,52 +655,66 @@ export default function Home() {
     setIsProcessingFinal(true);
 
     try {
-      const plainText = convertEditorContentToPlainText(editorContent);
-
       // Hitung jumlah kata
-      const wordCount = plainText.split(/\s+/).filter((word) => word.length > 0).length;
+      const wordCount = content
+        .split(/\s+/)
+        .filter((word) => word.length > 0).length;
 
       // Validasi konten tidak kosong
-      if (!plainText || plainText.trim() === '') {
+      if (
+        !content ||
+        content.trim() === "" ||
+        content.trim() === "Mulai menulis artikel Anda di sini..."
+      ) {
         alert("Silakan tulis konten terlebih dahulu!");
         setIsProcessingFinal(false);
         return;
       }
 
+      // Validasi minimal kata
       if (wordCount < 10) {
         alert("Konten terlalu pendek untuk dianalisis. Minimal 10 kata.");
         setIsProcessingFinal(false);
         return;
       }
 
-      const aiCheckResult = await performAICheck(plainText);
+      // Lakukan pengecekan AI
+      console.log("Performing AI check...");
+      const aiCheckResult = await performAICheck(content);
+      console.log("AI check completed:", aiCheckResult);
 
+      // Cek jika persentase AI terlalu tinggi
       if (aiCheckResult.percentage > 80) {
         alert(
           `Konten Anda memiliki tingkat AI ${aiCheckResult.percentage}% yang terlalu tinggi. ` +
-          "Silakan edit konten Anda untuk mengurangi deteksi AI sebelum menyimpan final."
+            "Silakan edit konten Anda untuk mengurangi deteksi AI sebelum menyimpan final."
         );
         setIsProcessingFinal(false);
         return;
       }
 
+      // Buat entry riwayat
       const historyEntry: HistoryItem = {
         id: Date.now().toString(),
         timestamp: new Date(),
         aiPercentage: aiCheckResult.percentage,
-        wordCount,
+        wordCount: wordCount,
         title: fileName,
       };
 
       setHistory((prev) => [historyEntry, ...prev]);
 
+      console.log("Final Content:", content);
+      console.log("AI Check Result:", aiCheckResult);
+
+      // Tampilkan hasil
       alert(
         `Artikel berhasil disimpan!\n\n` +
-        `Deteksi AI: ${aiCheckResult.percentage}%\n` +
-        `GPTZero: ${aiCheckResult.gptzero.aiPercentage}%\n` +
-        `Westlake: ${aiCheckResult.westlake.aiPercentage}%\n` +
-        `Jumlah kata: ${wordCount}\n` +
-        `Waktu: ${new Date().toLocaleString()}`
+          `Deteksi AI: ${aiCheckResult.percentage}%\n` +
+          `GPTZero: ${aiCheckResult.gptzero.aiPercentage}%\n` +
+          `Westlake: ${aiCheckResult.westlake.aiPercentage}%\n` +
+          `Jumlah kata: ${wordCount}\n` +
+          `Waktu: ${new Date().toLocaleString()}`
       );
     } catch (error) {
       console.error("Error saving final:", error);
@@ -728,7 +723,6 @@ export default function Home() {
       setIsProcessingFinal(false);
     }
   };
-
 
   const handleSaveDraft = () => {
     console.log("Draft Content:", content);
@@ -769,6 +763,7 @@ export default function Home() {
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<string[]>([]);
   const [editorContent, setEditorContent] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleContentChange = (content: any[]) => {
         setEditorContent(content);
@@ -1154,7 +1149,6 @@ export default function Home() {
               >
                 {/* BlockNote Editor Component dengan AI Indonesia */}
                 <BlockNoteEditorComponent
-                  ref={editorRef}
                   onContentChange={handleContentChange}
                   style={{
                     flex: 1,
@@ -1184,23 +1178,16 @@ export default function Home() {
                   <Button 
                     variant="filled" 
                     color="blue" 
-                    leftSection={
-                      isProcessingFinal ? (
-                        <Loader size={18} color="white" />
-                      ) : (
-                        <IconUpload size={18} />
-                      )
-                    } 
+                    leftSection={<IconUpload size={18} />} 
                     radius="md" 
                     size="md" 
                     px={24} 
-                    onClick={handleFinalSave}
+                    onClick={handleSaveFinal}
                     style={{
                       transition: 'all 0.2s ease',
                     }}
-                    disabled={isProcessingFinal}
                   >
-                    {isProcessingFinal ? "AI Checker..." : "Simpan Final"}
+                    Simpan Final
                   </Button>
                 </Group>
               </Box>    
@@ -1217,8 +1204,8 @@ export default function Home() {
                   flexDirection: "column",
                   justifyContent: "flex-start",
                   maxHeight: "calc(100vh - 140px)", // samakan tinggi dengan panel tengah
-                  // height: "100%",              // 🟢 FIX INI
-                  // minHeight: "100%",
+                  height: "100%",              // 🟢 FIX INI
+                  minHeight: "100%",
                   overflow: "hidden",
                   boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
                 }}
@@ -1240,7 +1227,7 @@ export default function Home() {
                 >
                   {[
                     { icon: <IconGraph size={20} />, value: "knowledge" },
-                    { icon: <IconGraph size={20} />, value: "chat" },
+                    { icon: <IconMessageCircle2 size={20} />, value: "chat" },
                     { icon: <IconList size={20} />, value: "bibliography" },
                     { icon: <IconHistory size={20} />, value: "history" },
                   ].map((item) => (
@@ -1350,611 +1337,611 @@ export default function Home() {
                   </>
                 )}
 
-                <ScrollArea style={{ flex: 1 }}>
-                  {activeTab === "chat" && (
-                    <>
-                      {/* Header section dengan informasi */}
-                      <Group align="center" justify="space-between" mb="md">
-                        <Group align="center" gap="sm">
-                          <Box
+                {activeTab === "chat" && (
+                  <>
+                    {/* Header section dengan informasi */}
+                    <Group align="center" justify="space-between" mb="md">
+                      <Group align="center" gap="sm">
+                        <Box
+                          style={{
+                            backgroundColor: "#007BFF",
+                            padding: "8px",
+                            borderRadius: "12px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <IconList size={18} color="#fff" />
+                        </Box>
+                        <Box>
+                          <Title
+                            order={4}
                             style={{
-                              backgroundColor: "#007BFF",
-                              padding: "8px",
-                              borderRadius: "12px",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
+                              margin: 0,
+                              color: "#007BFF",
+                              fontWeight: 700,
                             }}
                           >
-                            <IconList size={18} color="#fff" />
-                          </Box>
-                          <Box>
-                            <Title
-                              order={4}
-                              style={{
-                                margin: 0,
-                                color: "#007BFF",
-                                fontWeight: 700,
-                              }}
-                            >
-                              Reference Manager ({article.length})
-                            </Title>
-                            <Text size="xs" c="dimmed" mt={-4}>
-                              Kelola reference manager
-                            </Text>
-                          </Box>
-                        </Group>
+                            Reference Manager ({article.length})
+                          </Title>
+                          <Text size="xs" c="dimmed" mt={-4}>
+                            Kelola reference manager
+                          </Text>
+                        </Box>
                       </Group>
+                    </Group>
 
-                      <div
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "1px",
+                        backgroundColor: "#ccc",
+                        marginBottom: "12px",
+                      }}
+                    />
+
+                    {/* Search box untuk pencarian artikel */}
+                    <Box mb="md">
+                      <TextInput
+                        placeholder="Cari Artikel"
+                        variant="filled"
+                        leftSection={<IconSearch size={16} />}
+                        value={searchQuery}
                         style={{
-                          width: "100%",
-                          height: "1px",
-                          backgroundColor: "#ccc",
-                          marginBottom: "12px",
+                          backgroundColor:
+                            computedColorScheme === "dark"
+                              ? "#2a2a2a"
+                              : "#f8f9fa",
+                        }}
+                        onChange={(e) => {
+                          setSearchQuery(e.currentTarget.value);
                         }}
                       />
+                      {searchQuery && (
+                        <Text size="xs" c="dimmed" mt="xs">
+                          Ditemukan {filteredArticles.length} artikel
+                        </Text>
+                      )}
+                    </Box>
 
-                      {/* Search box untuk pencarian artikel */}
-                      <Box mb="md">
-                        <TextInput
-                          placeholder="Cari Artikel"
-                          variant="filled"
-                          leftSection={<IconSearch size={16} />}
-                          value={searchQuery}
-                          style={{
-                            backgroundColor:
-                              computedColorScheme === "dark"
-                                ? "#2a2a2a"
-                                : "#f8f9fa",
-                          }}
-                          onChange={(e) => {
-                            setSearchQuery(e.currentTarget.value);
-                          }}
-                        />
-                        {searchQuery && (
-                          <Text size="xs" c="dimmed" mt="xs">
-                            Ditemukan {filteredArticles.length} artikel
+                    {/* Area daftar artikel dengan scroll */}
+                    <ScrollArea
+                      style={{
+                        flex: 1,
+                        minHeight: "400px",
+                        overflow: "auto",
+                      }}
+                    >
+                      {filteredArticles.length === 0 ? (
+                        <Box ta="center" py="xl">
+                          <Text size="sm" c="dimmed">
+                            {searchQuery
+                              ? "Tidak ditemukan artikel yang sesuai dengan pencarian Anda"
+                              : "Tidak ada sumber yang ditemukan"}
                           </Text>
-                        )}
-                      </Box>
-
-                      {/* Area daftar artikel dengan scroll */}
-                      <ScrollArea
-                        style={{
-                          flex: 1,
-                          minHeight: "400px",
-                          overflow: "auto",
-                        }}
-                      >
-                        {filteredArticles.length === 0 ? (
-                          <Box ta="center" py="xl">
-                            <Text size="sm" c="dimmed">
-                              {searchQuery
-                                ? "Tidak ditemukan artikel yang sesuai dengan pencarian Anda"
-                                : "Tidak ada sumber yang ditemukan"}
-                            </Text>
-                            {searchQuery && (
-                              <Button
-                                variant="subtle"
-                                size="xs"
-                                mt="sm"
-                                onClick={() => setSearchQuery("")}
-                              >
-                                Hapus pencarian
-                              </Button>
-                            )}
-                          </Box>
-                        ) : (
-                          <Stack gap="md">
-                            {filteredArticles.map((item, i) => (
-                              <Box
-                                key={item.id}
-                                p="md"
-                                style={{
+                          {searchQuery && (
+                            <Button
+                              variant="subtle"
+                              size="xs"
+                              mt="sm"
+                              onClick={() => setSearchQuery("")}
+                            >
+                              Hapus pencarian
+                            </Button>
+                          )}
+                        </Box>
+                      ) : (
+                        <Stack gap="md">
+                          {filteredArticles.map((item, i) => (
+                            <Box
+                              key={item.id}
+                              p="md"
+                              style={{
+                                backgroundColor:
+                                  computedColorScheme === "dark"
+                                    ? "#1a1a1a"
+                                    : "#ffffff",
+                                borderRadius: "8px",
+                                border: `1px solid ${
+                                  computedColorScheme === "dark"
+                                    ? "#333"
+                                    : "#e9ecef"
+                                }`,
+                                cursor: "pointer",
+                                transition: "all 0.2s ease",
+                                "&:hover": {
                                   backgroundColor:
                                     computedColorScheme === "dark"
-                                      ? "#1a1a1a"
-                                      : "#ffffff",
-                                  borderRadius: "8px",
-                                  border: `1px solid ${
+                                      ? "#2a2a2a"
+                                      : "#f8f9fa",
+                                  borderColor:
                                     computedColorScheme === "dark"
-                                      ? "#333"
-                                      : "#e9ecef"
-                                  }`,
-                                  cursor: "pointer",
-                                  transition: "all 0.2s ease",
-                                  "&:hover": {
-                                    backgroundColor:
+                                      ? "#444"
+                                      : "#dee2e6",
+                                },
+                              }}
+                              onClick={() => {
+                                // Handle artikel diklik
+                                console.log("Clicked article:", item);
+                              }}
+                            >
+                              {/* Icon artikel dan konten */}
+                              <Group gap="sm" align="flex-start">
+                                {/* Icon dokumen */}
+                                <Box
+                                  style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                    marginTop: "2px",
+                                  }}
+                                >
+                                  <IconFileText
+                                    size={16}
+                                    color={
                                       computedColorScheme === "dark"
-                                        ? "#2a2a2a"
-                                        : "#f8f9fa",
-                                    borderColor:
-                                      computedColorScheme === "dark"
-                                        ? "#444"
-                                        : "#dee2e6",
-                                  },
-                                }}
-                                onClick={() => {
-                                  // Handle artikel diklik
-                                  console.log("Clicked article:", item);
-                                }}
-                              >
-                                {/* Icon artikel dan konten */}
-                                <Group gap="sm" align="flex-start">
-                                  {/* Icon dokumen */}
-                                  <Box
+                                        ? "#888"
+                                        : "#6c757d"
+                                    }
+                                  />
+                                </Box>
+
+                                {/* Konten artikel */}
+                                <Box style={{ flex: 1, minWidth: 0 }}>
+                                  {/* Judul artikel */}
+                                  <Title
+                                    order={6}
                                     style={{
-                                      width: "20px",
-                                      height: "20px",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      flexShrink: 0,
-                                      marginTop: "2px",
+                                      margin: 0,
+                                      lineHeight: 1.4,
+                                      fontWeight: 600,
+                                      fontSize: "14px",
+                                      color:
+                                        computedColorScheme === "dark"
+                                          ? "#fff"
+                                          : "#212529",
                                     }}
                                   >
-                                    <IconFileText
-                                      size={16}
-                                      color={
-                                        computedColorScheme === "dark"
-                                          ? "#888"
-                                          : "#6c757d"
-                                      }
-                                    />
-                                  </Box>
+                                    {item.title}
+                                  </Title>
 
-                                  {/* Konten artikel */}
-                                  <Box style={{ flex: 1, minWidth: 0 }}>
-                                    {/* Judul artikel */}
-                                    <Title
-                                      order={6}
-                                      style={{
-                                        margin: 0,
-                                        lineHeight: 1.4,
-                                        fontWeight: 600,
-                                        fontSize: "14px",
-                                        color:
-                                          computedColorScheme === "dark"
-                                            ? "#fff"
-                                            : "#212529",
-                                      }}
-                                    >
-                                      {item.title}
-                                    </Title>
-
-                                    {/* Deskripsi/background artikel */}
-                                    {item.att_background && (
-                                      <Text
-                                        size="xs"
-                                        c="dimmed"
-                                        mt={4}
-                                        style={{
-                                          lineHeight: 1.4,
-                                          fontSize: "12px",
-                                          overflow: "hidden",
-                                          display: "-webkit-box",
-                                          WebkitLineClamp: 2,
-                                          WebkitBoxOrient: "vertical",
-                                        }}
-                                      >
-                                        {item.att_background}
-                                      </Text>
-                                    )}
-
-                                    {/* Metadata artikel */}
+                                  {/* Deskripsi/background artikel */}
+                                  {item.att_background && (
                                     <Text
                                       size="xs"
                                       c="dimmed"
-                                      mt={2}
+                                      mt={4}
                                       style={{
-                                        lineHeight: 1.3,
+                                        lineHeight: 1.4,
                                         fontSize: "12px",
+                                        overflow: "hidden",
+                                        display: "-webkit-box",
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: "vertical",
                                       }}
                                     >
-                                      ID: {item.id}
+                                      {item.att_background}
                                     </Text>
-                                  </Box>
+                                  )}
 
-                                  {/* Icon star/favorite */}
-                                  <ActionIcon
-                                    variant="subtle"
-                                    size="sm"
-                                    color="yellow"
-                                    style={{ flexShrink: 0 }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      console.log("Star article:", item);
+                                  {/* Metadata artikel */}
+                                  <Text
+                                    size="xs"
+                                    c="dimmed"
+                                    mt={2}
+                                    style={{
+                                      lineHeight: 1.3,
+                                      fontSize: "12px",
                                     }}
                                   >
-                                    <IconStar size={16} />
-                                  </ActionIcon>
-                                </Group>
+                                    ID: {item.id}
+                                  </Text>
+                                </Box>
 
-                                {/* Tombol aksi artikel */}
-                                <Group gap="md" mt="sm">
-                                  {/* Tombol cite - tambah ke bibliography */}
-                                  <Button
-                                    variant="subtle"
-                                    color="blue"
-                                    size="compact-sm"
-                                    leftSection={<IconPlus size={14} />}
-                                    style={{ padding: 0, height: "auto" }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      addArticleToBibliography(item);
-                                    }}
-                                  >
-                                    Cite
-                                  </Button>
-
-                                  {/* Tombol view - buka URL artikel */}
-                                  <Button
-                                    variant="subtle"
-                                    color="gray"
-                                    size="compact-sm"
-                                    leftSection={<IconExternalLink size={14} />}
-                                    style={{ padding: 0, height: "auto" }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (item.att_url) {
-                                        window.open(item.att_url, "_blank");
-                                      }
-                                    }}
-                                  >
-                                    View
-                                  </Button>
-
-                                  {/* Tombol AI chat - analisis dengan AI */}
-                                  <Button
-                                    variant="subtle"
-                                    color="gray"
-                                    size="compact-sm"
-                                    leftSection={<IconMessageCircle size={14} />}
-                                    style={{ padding: 0, height: "auto" }}
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      const prompt = `Analyze this article: ${item.title} - ${item.att_background}`;
-                                      alert(
-                                        `AI Analysis feature will be available soon.`
-                                      );
-                                    }}
-                                  >
-                                    AI Chat
-                                  </Button>
-                                </Group>
-                              </Box>
-                            ))}
-                          </Stack>
-                        )}
-                      </ScrollArea>
-                    </>
-                  )}
-                  {activeTab === "bibliography" && (
-                    <>
-                      {/* Header dengan info jumlah bibliography */}
-                      <Group align="center" justify="space-between" mb="md">
-                        <Group align="center" gap="sm">
-                          <Box
-                            style={{
-                              backgroundColor: "#007BFF",
-                              padding: "8px",
-                              borderRadius: "12px",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <IconList size={18} color="#fff" />
-                          </Box>
-                          <Box>
-                            <Title
-                              order={4}
-                              style={{
-                                margin: 0,
-                                color: "#007BFF",
-                                fontWeight: 700,
-                              }}
-                            >
-                              Daftar Pustaka ({bibliographyList.length})
-                            </Title>
-                            <Text size="xs" c="dimmed" mt={-4}>
-                              Kelola sitasi Anda
-                            </Text>
-                          </Box>
-                        </Group>
-                      </Group>
-
-                      {/* Area daftar bibliography dengan scroll */}
-                      <ScrollArea
-                        style={{
-                          flex: 1,
-                          border: "1px solid #ccc",
-                          borderRadius: "8px",
-                          padding: "8px",
-                          backgroundColor:
-                            computedColorScheme === "dark" ? "#1e1e1e" : "#fff",
-                          minHeight: "200px",
-                          maxHeight: "350px",
-                          overflow: "auto",
-                        }}
-                      >
-                        {bibliographyList.length === 0 ? (
-                          <Text size="xs" c="dimmed" ta="center" mt="xl">
-                            Belum ada daftar pustaka. Gunakan tombol "Cite" pada
-                            artikel referensi untuk menambah.
-                          </Text>
-                        ) : (
-                          <Stack gap="xs">
-                            {bibliographyList
-                              .sort((a, b) => a.number - b.number)
-                              .map((bibliography) => (
-                                <Paper
-                                  key={bibliography.id}
-                                  p="sm"
-                                  withBorder
-                                  style={{
-                                    backgroundColor:
-                                      computedColorScheme === "dark"
-                                        ? "#2a2a2a"
-                                        : "#fff",
-                                    cursor: "pointer",
-                                    borderLeft: "4px solid #007BFF",
-                                    transition: "all 0.2s ease",
+                                {/* Icon star/favorite */}
+                                <ActionIcon
+                                  variant="subtle"
+                                  size="sm"
+                                  color="yellow"
+                                  style={{ flexShrink: 0 }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    console.log("Star article:", item);
                                   }}
-                                  onClick={() => insertCitation(bibliography)}
                                 >
-                                  <Group
-                                    justify="space-between"
-                                    align="flex-start"
-                                  >
-                                    <Box style={{ flex: 1 }}>
-                                      {/* Badge nomor dan tipe */}
-                                      <Group gap="xs" mb="xs">
-                                        <Badge
-                                          size="sm"
-                                          color="blue"
-                                          variant="filled"
-                                          style={{ borderRadius: "4px" }}
-                                        >
-                                          [{bibliography.number}]
-                                        </Badge>
-                                        <Badge
-                                          size="xs"
-                                          color="gray"
-                                          variant="light"
-                                        >
-                                          {bibliography.journal
-                                            ? "Jurnal"
-                                            : bibliography.publisher
-                                            ? "Buku"
-                                            : "Lainnya"}
-                                        </Badge>
-                                      </Group>
+                                  <IconStar size={16} />
+                                </ActionIcon>
+                              </Group>
 
-                                      {/* Informasi penulis */}
-                                      <Text
-                                        size="sm"
-                                        fw={600}
-                                        lineClamp={1}
-                                        mb="xs"
-                                      >
-                                        {bibliography.author}
-                                      </Text>
+                              {/* Tombol aksi artikel */}
+                              <Group gap="md" mt="sm">
+                                {/* Tombol cite - tambah ke bibliography */}
+                                <Button
+                                  variant="subtle"
+                                  color="blue"
+                                  size="compact-sm"
+                                  leftSection={<IconPlus size={14} />}
+                                  style={{ padding: 0, height: "auto" }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addArticleToBibliography(item);
+                                  }}
+                                >
+                                  Cite
+                                </Button>
 
-                                      {/* Judul dan tahun */}
-                                      <Text
-                                        size="xs"
-                                        c="dimmed"
-                                        lineClamp={2}
-                                        mb="xs"
-                                      >
-                                        {bibliography.title} ({bibliography.year})
-                                      </Text>
+                                {/* Tombol view - buka URL artikel */}
+                                <Button
+                                  variant="subtle"
+                                  color="gray"
+                                  size="compact-sm"
+                                  leftSection={<IconExternalLink size={14} />}
+                                  style={{ padding: 0, height: "auto" }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (item.att_url) {
+                                      window.open(item.att_url, "_blank");
+                                    }
+                                  }}
+                                >
+                                  View
+                                </Button>
 
-                                      {/* Publisher atau journal */}
-                                      {(bibliography.publisher ||
-                                        bibliography.journal) && (
-                                        <Text size="xs" c="dimmed" lineClamp={1}>
-                                          {bibliography.journal ||
-                                            bibliography.publisher}
-                                        </Text>
-                                      )}
-                                    </Box>
-
-                                    {/* Menu aksi untuk setiap bibliography */}
-                                    <Menu shadow="md" width={120}>
-                                      <Menu.Target>
-                                        <ActionIcon
-                                          variant="subtle"
-                                          color="gray"
-                                          size="sm"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <IconDotsVertical size={14} />
-                                        </ActionIcon>
-                                      </Menu.Target>
-                                      <Menu.Dropdown>
-                                        {/* Insert nomor sitasi */}
-                                        <Menu.Item
-                                          leftSection={<IconNumber size={14} />}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            insertCitation(bibliography);
-                                          }}
-                                        >
-                                          Insert [{bibliography.number}]
-                                        </Menu.Item>
-                                        <Menu.Divider />
-                                        {/* Hapus bibliography */}
-                                        <Menu.Item
-                                          color="red"
-                                          leftSection={<IconTrash size={14} />}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDeleteBibliography(
-                                              bibliography
-                                            );
-                                          }}
-                                        >
-                                          Delete
-                                        </Menu.Item>
-                                      </Menu.Dropdown>
-                                    </Menu>
-                                  </Group>
-                                </Paper>
-                              ))}
-                          </Stack>
-                        )}
-                      </ScrollArea>
-
-                      {/* Preview daftar pustaka terformat */}
-                      {bibliographyList.length > 0 && (
-                        <>
-                          <Divider my="md" />
-                          <Group justify="space-between" align="center" mb="sm">
-                            <Text size="sm" fw={600} c="#007BFF">
-                              Preview Daftar Pustaka
-                            </Text>
-                            {/* Tombol copy ke clipboard */}
-                            <Tooltip label="Copy bibliography">
-                              <ActionIcon
-                                variant="subtle"
-                                size="sm"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(
-                                    generateFullBibliography()
-                                  );
-                                  alert("Daftar pustaka disalin ke clipboard!");
-                                }}
-                              >
-                                <IconFileText size={16} />
-                              </ActionIcon>
-                            </Tooltip>
-                          </Group>
-
-                          {/* Area preview bibliography terformat */}
-                          <ScrollArea
-                            style={{
-                              maxHeight: "120px",
-                              border: "1px solid #ddd",
-                              borderRadius: "6px",
-                              padding: "8px",
-                              backgroundColor:
-                                computedColorScheme === "dark"
-                                  ? "#1e1e1e"
-                                  : "#f8f9fa",
-                            }}
-                          >
-                            <Text
-                              size="xs"
-                              style={{
-                                fontFamily: "monospace",
-                                lineHeight: 1.4,
-                                whiteSpace: "pre-wrap",
-                              }}
-                            >
-                              {generateFullBibliography()}
-                            </Text>
-                          </ScrollArea>
-                        </>
+                                {/* Tombol AI chat - analisis dengan AI */}
+                                <Button
+                                  variant="subtle"
+                                  color="gray"
+                                  size="compact-sm"
+                                  leftSection={<IconMessageCircle size={14} />}
+                                  style={{ padding: 0, height: "auto" }}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    const prompt = `Analyze this article: ${item.title} - ${item.att_background}`;
+                                    alert(
+                                      `AI Analysis feature will be available soon.`
+                                    );
+                                  }}
+                                >
+                                  AI Chat
+                                </Button>
+                              </Group>
+                            </Box>
+                          ))}
+                        </Stack>
                       )}
+                    </ScrollArea>
+                  </>
+                )}
 
-                      <Text size="xs" c="dimmed" ta="center" mt="sm">
-                        Klik item untuk insert [nomor] ke teks
-                      </Text>
-                    </>
-                  )}
-                  {activeTab === "history" && (
-                    <>
-                      {/* Header dengan info jumlah riwayat */}
-                      <Group align="center" justify="space-between" mb="md">
-                        <Group align="center" gap="sm">
-                          <Box
+                {activeTab === "bibliography" && (
+                  <>
+                    {/* Header dengan info jumlah bibliography */}
+                    <Group align="center" justify="space-between" mb="md">
+                      <Group align="center" gap="sm">
+                        <Box
+                          style={{
+                            backgroundColor: "#007BFF",
+                            padding: "8px",
+                            borderRadius: "12px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <IconList size={18} color="#fff" />
+                        </Box>
+                        <Box>
+                          <Title
+                            order={4}
                             style={{
-                              backgroundColor: "#007BFF",
-                              padding: "8px",
-                              borderRadius: "12px",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
+                              margin: 0,
+                              color: "#007BFF",
+                              fontWeight: 700,
                             }}
                           >
-                            <IconHistory size={18} color="#fff" />
-                          </Box>
-                          <Box>
-                            <Title
-                              order={4}
-                              style={{
-                                margin: 0,
-                                color: "#007BFF",
-                                fontWeight: 700,
-                              }}
-                            >
-                              Riwayat ({history.length})
-                            </Title>
-                            <Text size="xs" c="dimmed" mt={-4}>
-                              Lihat riwayat penyimpanan
-                            </Text>
-                          </Box>
-                        </Group>
-                      </Group>
-
-                      {/* Area daftar riwayat dengan scroll */}
-                      <ScrollArea style={{ flex: 1, minHeight: "400px" }}>
-                        {history.length === 0 ? (
-                          <Text size="xs" c="dimmed" ta="center" py="sm">
-                            Belum ada riwayat. Klik "Simpan Final" untuk membuat
-                            catatan.
+                            Daftar Pustaka ({bibliographyList.length})
+                          </Title>
+                          <Text size="xs" c="dimmed" mt={-4}>
+                            Kelola sitasi Anda
                           </Text>
-                        ) : (
-                          <Stack gap="xs">
-                            {history.map((item) => (
+                        </Box>
+                      </Group>
+                    </Group>
+
+                    {/* Area daftar bibliography dengan scroll */}
+                    <ScrollArea
+                      style={{
+                        flex: 1,
+                        border: "1px solid #ccc",
+                        borderRadius: "8px",
+                        padding: "8px",
+                        backgroundColor:
+                          computedColorScheme === "dark" ? "#1e1e1e" : "#fff",
+                        minHeight: "200px",
+                        maxHeight: "350px",
+                        overflow: "auto",
+                      }}
+                    >
+                      {bibliographyList.length === 0 ? (
+                        <Text size="xs" c="dimmed" ta="center" mt="xl">
+                          Belum ada daftar pustaka. Gunakan tombol "Cite" pada
+                          artikel referensi untuk menambah.
+                        </Text>
+                      ) : (
+                        <Stack gap="xs">
+                          {bibliographyList
+                            .sort((a, b) => a.number - b.number)
+                            .map((bibliography) => (
                               <Paper
-                                key={item.id}
-                                p="xs"
+                                key={bibliography.id}
+                                p="sm"
                                 withBorder
                                 style={{
                                   backgroundColor:
                                     computedColorScheme === "dark"
-                                      ? "#1e1e1e"
+                                      ? "#2a2a2a"
                                       : "#fff",
+                                  cursor: "pointer",
+                                  borderLeft: "4px solid #007BFF",
+                                  transition: "all 0.2s ease",
                                 }}
+                                onClick={() => insertCitation(bibliography)}
                               >
-                                <Group justify="space-between" align="center">
+                                <Group
+                                  justify="space-between"
+                                  align="flex-start"
+                                >
                                   <Box style={{ flex: 1 }}>
-                                    {/* Judul artikel */}
-                                    <Text size="xs" fw={500} lineClamp={1}>
-                                      {item.title}
+                                    {/* Badge nomor dan tipe */}
+                                    <Group gap="xs" mb="xs">
+                                      <Badge
+                                        size="sm"
+                                        color="blue"
+                                        variant="filled"
+                                        style={{ borderRadius: "4px" }}
+                                      >
+                                        [{bibliography.number}]
+                                      </Badge>
+                                      <Badge
+                                        size="xs"
+                                        color="gray"
+                                        variant="light"
+                                      >
+                                        {bibliography.journal
+                                          ? "Jurnal"
+                                          : bibliography.publisher
+                                          ? "Buku"
+                                          : "Lainnya"}
+                                      </Badge>
+                                    </Group>
+
+                                    {/* Informasi penulis */}
+                                    <Text
+                                      size="sm"
+                                      fw={600}
+                                      lineClamp={1}
+                                      mb="xs"
+                                    >
+                                      {bibliography.author}
                                     </Text>
-                                    {/* Tanggal penyimpanan */}
-                                    <Text size="xs" c="dimmed">
-                                      {item.timestamp.toLocaleDateString()}
+
+                                    {/* Judul dan tahun */}
+                                    <Text
+                                      size="xs"
+                                      c="dimmed"
+                                      lineClamp={2}
+                                      mb="xs"
+                                    >
+                                      {bibliography.title} ({bibliography.year})
                                     </Text>
+
+                                    {/* Publisher atau journal */}
+                                    {(bibliography.publisher ||
+                                      bibliography.journal) && (
+                                      <Text size="xs" c="dimmed" lineClamp={1}>
+                                        {bibliography.journal ||
+                                          bibliography.publisher}
+                                      </Text>
+                                    )}
                                   </Box>
-                                  {/* Badge persentase AI dengan warna sesuai tingkat */}
-                                  <Badge
-                                    size="sm"
-                                    color={
-                                      item.aiPercentage > 80
-                                        ? "red"
-                                        : item.aiPercentage > 50
-                                        ? "yellow"
-                                        : "green"
-                                    }
-                                    variant="filled"
-                                  >
-                                    {item.aiPercentage}%
-                                  </Badge>
+
+                                  {/* Menu aksi untuk setiap bibliography */}
+                                  <Menu shadow="md" width={120}>
+                                    <Menu.Target>
+                                      <ActionIcon
+                                        variant="subtle"
+                                        color="gray"
+                                        size="sm"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <IconDotsVertical size={14} />
+                                      </ActionIcon>
+                                    </Menu.Target>
+                                    <Menu.Dropdown>
+                                      {/* Insert nomor sitasi */}
+                                      <Menu.Item
+                                        leftSection={<IconNumber size={14} />}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          insertCitation(bibliography);
+                                        }}
+                                      >
+                                        Insert [{bibliography.number}]
+                                      </Menu.Item>
+                                      <Menu.Divider />
+                                      {/* Hapus bibliography */}
+                                      <Menu.Item
+                                        color="red"
+                                        leftSection={<IconTrash size={14} />}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteBibliography(
+                                            bibliography
+                                          );
+                                        }}
+                                      >
+                                        Delete
+                                      </Menu.Item>
+                                    </Menu.Dropdown>
+                                  </Menu>
                                 </Group>
                               </Paper>
                             ))}
-                          </Stack>
-                        )}
-                      </ScrollArea>
-                    </>
-                  )}
-                </ScrollArea>
+                        </Stack>
+                      )}
+                    </ScrollArea>
+
+                    {/* Preview daftar pustaka terformat */}
+                    {bibliographyList.length > 0 && (
+                      <>
+                        <Divider my="md" />
+                        <Group justify="space-between" align="center" mb="sm">
+                          <Text size="sm" fw={600} c="#007BFF">
+                            Preview Daftar Pustaka
+                          </Text>
+                          {/* Tombol copy ke clipboard */}
+                          <Tooltip label="Copy bibliography">
+                            <ActionIcon
+                              variant="subtle"
+                              size="sm"
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  generateFullBibliography()
+                                );
+                                alert("Daftar pustaka disalin ke clipboard!");
+                              }}
+                            >
+                              <IconFileText size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+
+                        {/* Area preview bibliography terformat */}
+                        <ScrollArea
+                          style={{
+                            maxHeight: "120px",
+                            border: "1px solid #ddd",
+                            borderRadius: "6px",
+                            padding: "8px",
+                            backgroundColor:
+                              computedColorScheme === "dark"
+                                ? "#1e1e1e"
+                                : "#f8f9fa",
+                          }}
+                        >
+                          <Text
+                            size="xs"
+                            style={{
+                              fontFamily: "monospace",
+                              lineHeight: 1.4,
+                              whiteSpace: "pre-wrap",
+                            }}
+                          >
+                            {generateFullBibliography()}
+                          </Text>
+                        </ScrollArea>
+                      </>
+                    )}
+
+                    <Text size="xs" c="dimmed" ta="center" mt="sm">
+                      Klik item untuk insert [nomor] ke teks
+                    </Text>
+                  </>
+                )}
+
+                {activeTab === "history" && (
+                  <>
+                    {/* Header dengan info jumlah riwayat */}
+                    <Group align="center" justify="space-between" mb="md">
+                      <Group align="center" gap="sm">
+                        <Box
+                          style={{
+                            backgroundColor: "#007BFF",
+                            padding: "8px",
+                            borderRadius: "12px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <IconHistory size={18} color="#fff" />
+                        </Box>
+                        <Box>
+                          <Title
+                            order={4}
+                            style={{
+                              margin: 0,
+                              color: "#007BFF",
+                              fontWeight: 700,
+                            }}
+                          >
+                            Riwayat ({history.length})
+                          </Title>
+                          <Text size="xs" c="dimmed" mt={-4}>
+                            Lihat riwayat penyimpanan
+                          </Text>
+                        </Box>
+                      </Group>
+                    </Group>
+
+                    {/* Area daftar riwayat dengan scroll */}
+                    <ScrollArea style={{ flex: 1, minHeight: "400px" }}>
+                      {history.length === 0 ? (
+                        <Text size="xs" c="dimmed" ta="center" py="sm">
+                          Belum ada riwayat. Klik "Simpan Final" untuk membuat
+                          catatan.
+                        </Text>
+                      ) : (
+                        <Stack gap="xs">
+                          {history.map((item) => (
+                            <Paper
+                              key={item.id}
+                              p="xs"
+                              withBorder
+                              style={{
+                                backgroundColor:
+                                  computedColorScheme === "dark"
+                                    ? "#1e1e1e"
+                                    : "#fff",
+                              }}
+                            >
+                              <Group justify="space-between" align="center">
+                                <Box style={{ flex: 1 }}>
+                                  {/* Judul artikel */}
+                                  <Text size="xs" fw={500} lineClamp={1}>
+                                    {item.title}
+                                  </Text>
+                                  {/* Tanggal penyimpanan */}
+                                  <Text size="xs" c="dimmed">
+                                    {item.timestamp.toLocaleDateString()}
+                                  </Text>
+                                </Box>
+                                {/* Badge persentase AI dengan warna sesuai tingkat */}
+                                <Badge
+                                  size="sm"
+                                  color={
+                                    item.aiPercentage > 80
+                                      ? "red"
+                                      : item.aiPercentage > 50
+                                      ? "yellow"
+                                      : "green"
+                                  }
+                                  variant="filled"
+                                >
+                                  {item.aiPercentage}%
+                                </Badge>
+                              </Group>
+                            </Paper>
+                          ))}
+                        </Stack>
+                      )}
+                    </ScrollArea>
+                  </>
+                )}
               </Box>
             </Split>
           </Flex>

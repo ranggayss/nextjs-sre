@@ -41,10 +41,14 @@ import {
   IconFolderOpen,
   IconFileText,
   IconNotes,
+  IconAi,
 } from '@tabler/icons-react';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { useRouter } from 'next/navigation';
 import { eventBus } from '@/lib/event-bus';
+
+
+type ProjectType = 'brain' | 'writer';
 
 interface BrainstormingProject {
   id: string;
@@ -55,6 +59,7 @@ interface BrainstormingProject {
   chatCount: number;
   lastActivity: string;
   createdAt: string;
+  type: ProjectType;
 };
 
 interface BrainstormingSession {
@@ -67,7 +72,8 @@ interface BrainstormingSession {
 }
 
 export default function ProjectDashboard() {
-  const [projects, setProjects] = useState<BrainstormingProject[]>([]);
+  const [brainProjects, setBrainProjects] = useState<BrainstormingProject[]>([]);
+  const [writerProjects, setWriterProjects] = useState<BrainstormingProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<BrainstormingProject | null>(null);
@@ -78,9 +84,9 @@ export default function ProjectDashboard() {
   const [sidebarOpened, setSidebarOpened] = useState(false);
 
   const [mounted, setMounted] = useState(false);
-  const router = useRouter();
+  const router = useRouter(); 
   
-  const brainstormingSessions: BrainstormingSession[] = projects.map(project => ({
+  const brainstormingSessions: BrainstormingSession[] = brainProjects.map((project): BrainstormingSession => ({
     id: project.id,
     title: project.title,
     description: project.description,
@@ -123,6 +129,40 @@ export default function ProjectDashboard() {
 
   const fetchProjects = async () => {
     try {
+      const res = await fetch('/api/brainstorming-sessions', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+      });
+
+      const data = await res.json();
+
+      const formatted: BrainstormingProject[] = data.map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        description: p.description || '',
+        coverColor: p.coverColor || '#4c6ef5',
+        articleCount: p._count?.articles || 0,
+        chatCount: p._count?.chatMessages || 0,
+        lastActivity: new Date(p.lastActivity || p.updatedAt || p.createdAt).toLocaleDateString('id-ID', {
+          day: 'numeric',
+          month: 'short',
+        }),
+        createdAt: new Date(p.createdAt).toISOString().split('T')[0],
+        })
+      );
+
+      setBrainProjects(formatted.map(p => ({ ...p, type: 'brain'})));
+    } catch (error) {
+      console.error('Gagal memuat proyek', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProjectsB = async () => {
+    try {
       const res = await fetch('/api/writer-sessions', {
         method: 'GET',
         headers: {
@@ -147,7 +187,7 @@ export default function ProjectDashboard() {
         })
       );
 
-      setProjects(formatted);
+      setWriterProjects(formatted.map(p => ({ ...p,type: 'writer'})));
     } catch (error) {
       console.error('Gagal memuat proyek', error);
     } finally {
@@ -159,6 +199,7 @@ export default function ProjectDashboard() {
   useEffect(() => {
 
     fetchProjects();
+    fetchProjectsB();
 
   }, []);
 
@@ -179,10 +220,12 @@ export default function ProjectDashboard() {
       }
     }, []);
 
-  const filteredProjects = projects.filter(project =>
-    project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    const allProjects = [...brainProjects, ...writerProjects];
+
+    const filteredProjects = allProjects.filter(project =>
+      project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   const handleSessionCreatedFromSidebar = useCallback(() => {
     fetchProjects();
@@ -191,7 +234,7 @@ export default function ProjectDashboard() {
   const handleCreateProject = async () => {
     if (!newProject.title.trim()) return;
     try {
-      const res = await fetch('/api/writer-sessions', {
+      const res = await fetch('/api/brainstorming-sessions', {
         method: 'POST',
         headers: {
           'Content-Type':'application/json'
@@ -217,49 +260,112 @@ export default function ProjectDashboard() {
     }
   };
 
+  const handleCreateProjectB = async () => {
+    if (!newProject.title.trim()) return;
+    try {
+      const res = await fetch('/api/writer-sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type':'application/json'
+        },
+        body: JSON.stringify(newProject),
+      });
+
+      const data = await res.json();
+
+      if (res.ok){
+        await fetchProjectsB(); // kamu bisa pisahkan ke fungsi di luar
+        eventBus.emit('sessionCreated');
+        setCreateModalOpen(false);
+        setNewProject({ title: '', description: '', coverColor: '#4c6ef5' });
+        
+        setMounted(false);
+        setTimeout(() => setMounted(true), 100);
+      } else {
+        throw new Error('Gagal membuat proyek');
+      }
+    } catch (error) {
+      console.error('Error', error);
+    }
+  };
+
   const handleDeleteProject = async (projectId: string) => {
     const confirmed = confirm('Apakah kamu yakin ingin menghapus proyek ini?');
     if (!confirmed) return;
 
+    const project =
+      brainProjects.find(p => p.id === projectId) ||
+      writerProjects.find(p => p.id === projectId);
+    
+    if (!project || !project.type) {
+      console.error('Proyek tidak ditemukan');
+      return;
+    }
+    
+    const endpoint =
+      project.type === 'writer'
+        ? `/api/writer-sessions/${projectId}`
+        : `/api/brainstorming-sessions/${projectId}`;
+
     try {
-      const res = await fetch(`/api/writer-sessions/${projectId}`, {
+      const res = await fetch(endpoint, {
         method: 'DELETE',
       });
 
-      if (res.ok){
-        await fetchProjects();
-        eventBus.emit('sessionDeleted', projectId);
-      } else{
-        const err = await res.json();
-        throw new Error(err?.error || 'Gagal menghapus proyek');
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error?.error || 'Gagal menghapus proyek');
       }
+
+      // Update state lokal
+      if (project.type === 'brain') {
+        setBrainProjects(prev => prev.filter(p => p.id !== projectId));
+      } else if (project.type === 'writer') {
+        setWriterProjects(prev => prev.filter(p => p.id !== projectId));
+      }
+
+      eventBus.emit('sessionDeleted', projectId);
     } catch (error) {
-      console.error(error);
+      console.error('Terjadi kesalahan saat menghapus proyek:', error);
     }
   };
 
   const handleEditProject = async () => {
     if (!editingProject) return;
 
+    const { id, title, description, coverColor, type } = editingProject;
+
+    const endpoint =
+      type === 'writer'
+        ? `/api/writer-sessions/${id}`
+        : `/api/brainstorming-sessions/${id}`;
+
     try {
-      const res = await fetch(`/api/writer-sessions/${editingProject.id}`, {
+      const res = await fetch(endpoint, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          title: editingProject.title,
-          description: editingProject.description,
-          coverColor: editingProject.coverColor,
+          title,
+          description,
+          coverColor,
         }),
       });
 
       if (!res.ok) {
-        throw new Error('Gagal menyimpan perubahan');
+        const err = await res.json()
+        throw new Error(err?.error || 'Gagal menyimpan perubahan');
       }
 
-      await fetchProjects();
-      eventBus.emit('sessionUpdated', editingProject.id);
+      // Refresh data dari server
+      if (type === 'brain') {
+        await fetchProjects();    
+      } else {
+        await fetchProjectsB();   
+      }
+
+      eventBus.emit('sessionUpdated', id);
       setEditingProject(null);
     } catch (error) {
       console.error('Edit error:', error);
@@ -275,15 +381,8 @@ export default function ProjectDashboard() {
       lastActivity: 'Baru dibuat',
       createdAt: new Date().toISOString().split('T')[0],
     };
-    setProjects(prev => [duplicated, ...prev]);
+    setBrainProjects(prev => [duplicated, ...prev]);
   };
-
-  const handleDeleteArticle = async (articleId: string) => {
-    await fetch(`/api/articles/${articleId}`, {
-      method: 'DELETE'
-    });
-    eventBus.emit('articleDeleted');
-  }
 
   const [selectedProject, setSelectedProject] = useState<BrainstormingProject | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -500,14 +599,14 @@ export default function ProjectDashboard() {
           <Group justify="space-between" align="flex-start" wrap="wrap">
             <Group align="center">
               <ThemeIcon size={42} radius="xl" variant="gradient" gradient={{ from: 'blue', to: 'cyan' }}>
-                <IconNotes size={24} />
+                <IconBrain size={24} />
               </ThemeIcon>
               <Stack gap={2}>
                 <Text size="xl" fw={700}>
-                  Writer Sessions Projects
+                  Brainstroming & Writer Sessions Projects
                 </Text>
                 <Text size="sm" c="dimmed">
-                  Pantau dan kelola seluruh sesi penulisan artikel secara lebih mudah.
+                  Mulai proyek penelitian baru dengan AI assistant
                 </Text>
               </Stack>
             </Group>
@@ -563,7 +662,7 @@ export default function ProjectDashboard() {
                 <Stack gap="sm" h="100%">
                   {/* Project content - clickable area */}
                   <div 
-                    onClick={() => router.push(`/projects-b/${project.id}`)}
+                    onClick={() => router.push(`/projects/${project.id}`)}
                     style={{ 
                       cursor: 'pointer',
                       flex: 1,
@@ -577,19 +676,49 @@ export default function ProjectDashboard() {
 
                   {/* Action buttons at bottom */}
                   <Group gap="xs" style={{ borderTop: '1px solid #e9ecef', paddingTop: 8 }}>
-                    <Button
-                      variant="filled"
-                      size="xs"
-                      fullWidth
-                    //   flex={1}
-                      leftSection={<IconFileText size={14} />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/projects-b/${project.id}`);
-                      }}
-                    >
-                      Writer Project
-                    </Button>
+                    {project.type === 'brain' && (
+                      <>
+                        <Button
+                          variant="filled"
+                          size="xs"
+                          flex={1}
+                          leftSection={<IconFileText size={14} />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/projects/${project.id}`);
+                          }}
+                        >
+                          Brain Project
+                        </Button>
+                        <Button
+                          variant="light"
+                          size="xs"
+                          flex={1}
+                          leftSection={<IconFileText size={14} />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/projects/${project.id}/draft`);
+                          }}
+                        >
+                          Writer Project
+                        </Button>
+                      </>
+                    )}
+                    
+                    {project.type === 'writer' && (
+                      <Button
+                        variant="filled"
+                        size="xs"
+                        flex={1}
+                        leftSection={<IconFileText size={14} />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/projects-b/${project.id}`);
+                        }}
+                      >
+                        Writer Project
+                      </Button>
+                    )}
                   </Group>
                 </Stack>
               </Card>
@@ -622,7 +751,7 @@ export default function ProjectDashboard() {
             setCreateModalOpen(false);
             setNewProject({ title: '', description: '', coverColor: '#4c6ef5' });
           }}
-          title="Buat Writer Session Baru"
+          title="Buat Brainstroming & Writer Session Baru"
           size="md"
         >
           <Stack gap="md">
@@ -673,9 +802,10 @@ export default function ProjectDashboard() {
               </Group>
             </Box>
 
-            <Group justify="flex-end" mt="md">
+            <Group justify="flex-end" mt="md" gap="sm">
               <Button
-                variant="subtle"
+                variant="default"
+                color="gray"
                 onClick={() => {
                   setCreateModalOpen(false);
                   setNewProject({ title: '', description: '', coverColor: '#4c6ef5' });
@@ -683,8 +813,22 @@ export default function ProjectDashboard() {
               >
                 Batal
               </Button>
-              <Button onClick={handleCreateProject} disabled={!newProject.title.trim()}>
-                Buat Proyek
+              <Button 
+                color="blue"
+                leftSection={<IconBrain size={14} />}
+                onClick={handleCreateProject} 
+                disabled={!newProject.title.trim()}
+              >
+                Proyek Brain
+              </Button>
+
+              <Button 
+                color="teal"
+                leftSection={<IconFileText size={14} />}
+                variant="filled"
+                onClick={handleCreateProjectB} 
+                disabled={!newProject.title.trim()}>
+                  Proyek Writer
               </Button>
             </Group>
           </Stack>

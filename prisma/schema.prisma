@@ -16,6 +16,11 @@ model Article {
   updateAt    DateTime              @updatedAt
   userId      String?
   sessionId   String?
+  abstract    String?
+  author      String?
+  doi         String?
+  keywords    String?
+  year        String?
   annotations Annotation[]
   session     BrainstormingSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user        User?                 @relation(fields: [userId], references: [id])
@@ -60,9 +65,10 @@ model Analytics {
   id        Int      @id @default(autoincrement())
   action    String
   document  String?
-  userId    String?
+  userId    String
   metadata  Json?
   timestamp DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("analytics")
 }
@@ -77,22 +83,43 @@ model User {
   updateAt             DateTime               @updatedAt
   group                String?
   nim                  String?
+  address              String?
+  avatar_url           String?
+  bio                  String?
+  birthDate            String?
+  faculty              String?
+  github               String?
+  isEmailVerified      Boolean?               @default(false)
+  isPhoneVerified      Boolean?               @default(false)
+  lastActive           DateTime?
+  linkedin             String?
+  major                String?
+  phone                String?
+  semester             Int?
+  settings             Json?
+  token_balance        Int?                   @default(0)
+  university           String?
+  website              String?
   annotations          Annotation[]
   articles             Article[]
+  Assignment           Assignment[]
+  AssignmentSubmission AssignmentSubmission[]
   brainstormingSession BrainstormingSession[]
   drafts               Draft[]
+  TokenUsage           TokenUsage[]
   writerSessions       WriterSession[]
+  analytics            Analytics[]
 }
 
 model Draft {
-  id        String         @id @default(uuid())
-  userId    String?
-  title     String
-  createdAt DateTime       @default(now())
-  writerId  String?
-  writerSession  WriterSession?  @relation(fields: [writerId], references: [id], onDelete: Cascade)
-  user      User?          @relation(fields: [userId], references: [id])
-  sections  DraftSection[]
+  id            String         @id @default(uuid())
+  userId        String?
+  title         String
+  createdAt     DateTime       @default(now())
+  writerId      String?
+  user          User?          @relation(fields: [userId], references: [id])
+  writerSession WriterSession? @relation(fields: [writerId], references: [id], onDelete: Cascade)
+  sections      DraftSection[]
 }
 
 model DraftSection {
@@ -135,6 +162,7 @@ model BrainstormingSession {
   articles               Article[]
   user                   User          @relation(fields: [userId], references: [id])
   chatMessages           ChatMessage[]
+  TokenUsage             TokenUsage[]
 }
 
 model ChatMessage {
@@ -149,15 +177,88 @@ model ChatMessage {
   session        BrainstormingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model documents {
-  id         String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  content    String
-  metadata   Json?                  @default("{}")
-  embedding  Unsupported("vector")?
-  created_at DateTime?              @default(now()) @db.Timestamptz(6)
+model WriterSession {
+  id           String   @id @default(uuid())
+  title        String
+  description  String?
+  userId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastActivity DateTime @default(now())
+  coverColor   String   @default("#4c6ef5")
+  drafts       Draft[]
+  user         User     @relation(fields: [userId], references: [id])
+}
 
-  @@index([embedding])
+model Document {
+  id        String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  content   String
+  metadata  Json                   @default("{}")
+  embedding Unsupported("vector")?
+  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("documents")
+}
+
+model Assignment {
+  id                   String                 @id
+  title                String
+  description          String
+  week_number          Int
+  assignment_code      String
+  file_url             String?
+  file_name            String?
+  due_date             DateTime?
+  is_active            Boolean                @default(true)
+  created_by           String
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime
+  User                 User                   @relation(fields: [created_by], references: [id], onDelete: Cascade)
+  AssignmentSubmission AssignmentSubmission[]
+
+  @@index([is_active])
+  @@index([week_number])
+}
+
+model AssignmentSubmission {
+  id                    String           @id
+  assignment_id         String
+  student_id            String
+  assignment_code_input String
+  file_url              String?
+  file_name             String?
+  submission_text       String?
+  status                SubmissionStatus @default(pending)
+  grade                 Int?
+  feedback              String?
+  submitted_at          DateTime         @default(now())
+  graded_at             DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime
+  Assignment            Assignment       @relation(fields: [assignment_id], references: [id], onDelete: Cascade)
+  User                  User             @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([assignment_id])
+  @@index([status])
+  @@index([student_id])
+}
+
+model TokenUsage {
+  id                   String                @id
+  userId               String
+  sessionId            String?
+  tokensUsed           Int
+  inputTokens          Int                   @default(0)
+  outputTokens         Int                   @default(0)
+  model                String
+  purpose              String
+  metadata             Json?
+  createdAt            DateTime              @default(now())
+  BrainstormingSession BrainstormingSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  User                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([userId])
 }
 
 enum Role {
@@ -165,25 +266,16 @@ enum Role {
   ADMIN
 }
 
-model WriterSession {
-  id                     String        @id @default(uuid())
-  title                  String
-  description            String?
-  userId                 String
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
-  lastActivity           DateTime      @default(now())
-  coverColor             String        @default("#4c6ef5")
-  drafts                 Draft[]
-  user                   User          @relation(fields: [userId], references: [id])
+enum ReferenceType {
+  JOURNAL
+  BOOK
+  WEBSITE
+  CONFERENCE
+  THESIS
 }
 
-model Document {
-  id        String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  content   String
-  metadata  Json                       @default("{}")
-  embedding Unsupported("vector(768)")? // Keep original vector type
-  createdAt DateTime                   @default(now()) @map("created_at") @db.Timestamptz
-
-  @@map("documents")
+enum SubmissionStatus {
+  pending
+  submitted
+  graded
 }
