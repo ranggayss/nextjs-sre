@@ -1214,14 +1214,14 @@ Buat HANYA outline heading untuk "${prompt}" tanpa konten paragraf.`;
       
       return [
         {
-          title: "AI Generator",
+          title: "Penyusun Artikel Cerdas",
           onItemClick: () => {
             setAIMode("new");
             openAIModal();
           },
           aliases: ["generate", "write", "tulis"],
           group: "AI Tools",
-          subtext: "Generate new content",
+          subtext: "Struktur & Konten Artikel Otomatis",
           icon: <IconEdit size={18} />,
         },
         {

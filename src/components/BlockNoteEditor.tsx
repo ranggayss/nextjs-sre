@@ -1,7 +1,7 @@
 "use client";
 
 import { createGroq } from "@ai-sdk/groq";
-import { filterSuggestionItems } from "@blocknote/core";
+import { filterSuggestionItems, BlockNoteEditor, } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
@@ -43,12 +43,12 @@ import {
   IconPencilPlus,
 } from "@tabler/icons-react";
 import { generateText } from "ai";
-import React from "react";
-import { forwardRef, useImperativeHandle, useRef } from "react";
+import React, { forwardRef, useImperativeHandle, useRef } from "react";
 
 // Interfaces
 interface BlockNoteEditorRef {
   getContent: () => any[];
+  getEditor: () => BlockNoteEditor;
   insertCitation: (citationText: string) => void;
   // tambahkan method lain yang diperlukan
 }
@@ -154,6 +154,7 @@ const BlockNoteEditorComponent = forwardRef(function BlockNoteEditorComponent(
 
   useImperativeHandle(ref, () => ({
     getEditor: () => editor,
+    getContent: () => editor.document,
     insertCitation: (citationText: string) => {
         // const cursor = editor.getTextCursorPosition();
         if (citationText) {
@@ -194,20 +195,20 @@ const BlockNoteEditorComponent = forwardRef(function BlockNoteEditorComponent(
   const inlineAISuggestions = [
     {
       icon: <IconPencilPlus size={16} />,
-      title: "Continue Writing",
-      description: "AI will continue from where you left off",
+      title: "Lanjutkan Tulisan",
+      description: "Biarkan AI meneruskan ide dari kalimat terakhir Anda",
       action: "continue"
     },
     {
       icon: <IconFileText size={16} />,
-      title: "Summarize",
-      description: "Create a summary of the content",
+      title: "Ringkasan Cerdas",
+      description: "Dapatkan inti dari tulisan Anda dalam versi yang lebih singkat",
       action: "summarize"
     },
     {
       icon: <IconBulb size={16} />,
-      title: "Write Anything...",
-      description: "Ask AI to write custom content",
+      title: "Tulis Sesuatu...",
+      description: "Minta AI untuk menulis sesuai kebutuhanmu.",
       action: "write_anything"
     }
   ];
@@ -1219,18 +1220,18 @@ Buat HANYA outline heading untuk "${prompt}" tanpa konten paragraf.`;
     
     return [
       {
-        title: "AI Generator",
+        title: "Penyusun Artikel Cerdas",
         onItemClick: () => {
           setAIMode("new");
           openAIModal();
         },
         aliases: ["generate", "write", "tulis"],
         group: "AI Tools",
-        subtext: "Generate new content",
+        subtext: "Struktur & Konten Otomatis",
         icon: <IconEdit size={18} />,
       },
       {
-        title: "Ask AI anything...",
+        title: "AI Penulis Interaktif",
         onItemClick: () => {
           setTimeout(() => {
             handleInlineAITrigger();
@@ -1238,7 +1239,7 @@ Buat HANYA outline heading untuk "${prompt}" tanpa konten paragraf.`;
         },
         aliases: ["ai", "assistant", "ask", "help"],
         group: "AI Tools",
-        subtext: "AI suggestions and actions",
+        subtext: "Tanya Jawab, Tulis, dan Ringkas Otomatis",
         icon: <IconSparkles size={18} />,
       }
     ];
@@ -1248,16 +1249,65 @@ Buat HANYA outline heading untuk "${prompt}" tanpa konten paragraf.`;
   const getCustomSlashMenuItems = React.useMemo(() => {
     const baseItems = getDefaultReactSlashMenuItems(editor);
     
+    const translatedItems = baseItems.map(item => {
+      if (item.title === "Table") {
+        return {
+          ...item,
+          title: "Tabel",
+          subtext: "Tabel dengan sel yang bisa diedit",
+        };
+      }
+
+      if (item.title === "Numbered List") {
+        return {
+          ...item,
+          title: "List Angka",
+          subtext: "Buat List dengan angka",
+        };
+      }
+
+      if (item.title === "Bulleted List" || item.title === "Bullet List") {
+        return {
+          ...item,
+          title: "List Butir",
+          subtext: "Buat list dengan poin",
+        };
+      }
+
+      if (item.title === "Heading 1") {
+        return {
+          ...item,
+          subtext: "Gunakan untuk judul utama halaman",
+        };
+      }
+
+      if (item.title === "Heading 2") {
+        return {
+          ...item,
+          subtext: "Gunakan untuk subjudul dalam konten",
+        };
+      }
+
+      if (item.title === "Heading 3") {
+        return {
+          ...item,
+          subtext: "Gunakan untuk sub-bagian dari Heading 2",
+        };
+      }
+
+      return item;
+    });
+
     const orderedItems = [
       ...getCustomAISlashMenuItems,
-      ...baseItems.filter(item => 
+      ...translatedItems.filter(item => 
         ['Heading 1', 'Heading 2', 'Heading 3'].includes(item.title)
       ),
-      ...baseItems.filter(item => 
-        ['Numbered List', 'Bulleted List', 'Bullet List'].includes(item.title)
+      ...translatedItems.filter(item => 
+        ['List Angka', 'List Butir'].includes(item.title)
       ),
-      ...baseItems.filter(item => 
-        ['Table', 'Divider'].includes(item.title)
+      ...translatedItems.filter(item => 
+        ['Tabel', 'Divider'].includes(item.title)
       )
     ];
 
@@ -1348,7 +1398,7 @@ Buat HANYA outline heading untuk "${prompt}" tanpa konten paragraf.`;
                     fontSize: '14px', 
                     fontWeight: 500 
                   }}>
-                    Ask AI anything...
+                    AI Penulis Interaktif
                   </span>
                 </div>
               </div>
@@ -1471,7 +1521,7 @@ Buat HANYA outline heading untuk "${prompt}" tanpa konten paragraf.`;
               <IconSparkles size={20} />
             </ThemeIcon>
             <Text fw={700} size="xl">
-              {aiMode === "continue" ? " AI Lanjutan Konten" : " AI Content Generator"}
+              {aiMode === "continue" ? " AI Lanjutan Konten" : " Pembuatan Struktur & Konten Artikel Otomatis"}
             </Text>
           </Group>
         }

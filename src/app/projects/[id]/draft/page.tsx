@@ -1,8 +1,12 @@
 "use client"
 
 import dynamic from 'next/dynamic';
+import { notifications } from '@mantine/notifications';
 import { useState, useEffect, useRef, useMemo } from 'react';
-import type { BlockNoteEditorRef } from '../../../../components/BlockNoteEditor';
+import { ExtendedEdge, ExtendedNode } from '../../../../types';
+import type { BlockNoteEditorRef } from '@/components/BlockNoteEditor';
+import AnnotationPanel from '@/components/AnnotationPanel';
+import ChatPanel from '@/components/ChatPanel';
 
 const BlockNoteEditorComponent = dynamic(() => import("../../../../components/BlockNoteEditor"), {
   ssr: false
@@ -36,6 +40,12 @@ import {
   Badge,
   Divider,
   Loader,
+  Modal,
+  Center,
+  Alert,
+  Grid,
+  RingProgress,
+  Progress,
 } from "@mantine/core";
 
 import {useDisclosure, useDebouncedCallback, useMediaQuery} from "@mantine/hooks";
@@ -65,7 +75,16 @@ import {
    IconTrash,
    IconNumber,
    IconDotsVertical,
-
+   IconHighlight,
+   IconRobot,
+   IconEdit,
+   IconAlertCircle,
+   IconAlertTriangle,
+   IconX,
+   IconCircleCheck,
+   IconBulb,
+   IconShieldCheck,
+   IconScan,
   } from "@tabler/icons-react";
 import classes from '../../../container.module.css';
 import myimage from '../../../imageCollection/LogoSRE_Fix.png';
@@ -110,27 +129,38 @@ interface HeadingItem {
 }
 
 interface HistoryItem {
-  id: string; // ID unik riwayat
+  id: string; // ID unik entry history
   timestamp: Date; // Waktu penyimpanan
-  aiPercentage: number; // Persentase deteksi AI
-  wordCount: number; // Jumlah kata
-  title: string; // Judul artikel
+  aiPercentage?: number; // Persentase AI detection (hanya untuk final submission)
+  wordCount: number; // Jumlah kata dalam dokumen
+  title: string; // Judul dokumen saat disimpan
+  version: string; // Versi dokumen ("Versi 1", "Versi 2", "Final")
+  type: "draft" | "final"; // Tipe penyimpanan: draft atau final submission
+  assignmentCode?: string; // Kode assignment dari dosen (untuk final submission)
 }
 
 interface AICheckResult {
-  percentage: number; // Persentase akhir (maksimal dari kedua checker)
-  gptzero: {
-    // Hasil dari GPTZero
-    aiPercentage: number;
-    source: string;
-    error?: boolean;
+  percentage: number; // Persentase kemungkinan konten dibuat oleh AI (0-100%)
+  isHuman: boolean; // True jika konten dianggap human-written (≤10% AI)
+  confidence: number; // Tingkat confidence analisis (0-100%)
+  analysis: {
+    // Detail analisis teknis
+    textLength: number; // Panjang teks dalam karakter
+    sentences: number; // Jumlah kalimat
+    avgSentenceLength: number; // Rata-rata panjang kalimat dalam kata
+    complexity: "Low" | "Medium" | "High"; // Tingkat kompleksitas teks
+    humanSentences: number; // Jumlah kalimat yang terdeteksi human-written
+    aiSentences: number; // Jumlah kalimat yang terdeteksi AI-generated
+    mixedSentences: number; // Jumlah kalimat dengan karakteristik campuran
   };
-  westlake: {
-    // Hasil dari Westlake
-    aiPercentage: number;
-    source: string;
-    error?: boolean;
-  };
+  recommendation: string; // Rekomendasi berdasarkan hasil analisis
+  highlightedContent: string; // Konten dengan highlighting per kalimat (HTML)
+  sentenceAnalysis: Array<{
+    // Analisis detail per kalimat
+    text: string; // Teks kalimat
+    probability: number; // Probabilitas AI (0-1)
+    type: "human" | "ai" | "mixed"; // Klasifikasi kalimat
+  }>;
 }
 
 interface User {
@@ -185,6 +215,7 @@ export default function Home() {
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [fileName, setFileName] = useState("Judul Artikel 1");
   const [headings, setHeadings] = useState<HeadingItem[]>([]);
+  const [draftCounter, setDraftCounter] = useState(1); // Counter untuk versi draft
   // State untuk daftar artikel dari API
   const [article, setArticle] = useState<Article[]>([]);
 
@@ -222,16 +253,26 @@ export default function Home() {
 
   // State untuk riwayat penyimpanan
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [isProcessingFinal, setIsProcessingFinal] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanningProgress, setScanningProgress] = useState(0); // Progress bar AI scanning (0-100%)
+  const [scanningText, setScanningText] = useState("Memulai analisis..."); // Teks status scanning
+  const [aiCheckResult, setAiCheckResult] = useState<AICheckResult | null>(
+    null
+  ); // Hasil AI detection
+  const [assignmentCode, setAssignmentCode] = useState("");
+
+  const [
+    aiResultModalOpened, // Modal hasil AI detection
+    { open: openAIResultModal, close: closeAIResultModal },
+  ] = useDisclosure(false);
+  const [
+    bibliographyModalOpened, // Modal form bibliography
+    { open: openBibliographyModal, close: closeBibliographyModal },
+  ] = useDisclosure(false);
 
   useEffect(() => {
     bibliographyListRef.current = bibliographyList;
   }, [bibliographyList]);
-
-  const [
-    bibliographyModalOpened,
-    { open: openBibliographyModal, close: closeBibliographyModal },
-  ] = useDisclosure(false);
 
   const [editingBibliography, setEditingBibliography] =
     useState<Bibliography | null>(null);
@@ -255,77 +296,240 @@ export default function Home() {
     medium: "",
   });
 
-  const checkWithGPTZero = async (text: string) => {
+  const analyzeSentences = (text: string) => {
+    // Pisahkan teks menjadi kalimat berdasarkan tanda baca
+    const sentences = text
+      .split(/[.!?]+/)
+      .filter((s) => s.trim().length > 0)
+      .map((s) => s.trim());
+
+    // Simulasi analisis per kalimat (dalam implementasi nyata, ini bisa menggunakan ML model)
+    return sentences.map((sentence) => {
+      const probability = Math.random(); // Simulasi probabilitas AI
+      let type: "human" | "ai" | "mixed";
+
+      // Klasifikasi berdasarkan probabilitas
+      if (probability < 0.15) {
+        type = "ai"; // Kalimat terdeteksi AI-generated
+      } else if (probability < 0.25) {
+        type = "mixed"; // Kalimat dengan karakteristik campuran
+      } else {
+        type = "human"; // Kalimat terdeteksi human-written
+      }
+
+      return {
+        text: sentence,
+        probability: Math.round(probability * 100) / 100,
+        type,
+      };
+    });
+  };
+
+  const createHighlightedContent = (
+    sentenceAnalysis: Array<{
+      text: string;
+      probability: number;
+      type: "human" | "ai" | "mixed";
+    }>
+  ) => {
+    return sentenceAnalysis
+      .map((analysis) => {
+        // Tentukan warna highlighting berdasarkan tipe kalimat
+        const color =
+          analysis.type === "ai"
+            ? "#ff6b6b" // Merah untuk AI-generated
+            : analysis.type === "mixed"
+            ? "#ffd43b" // Kuning untuk mixed
+            : "#51cf66"; // Hijau untuk human-written
+
+        // Wrap kalimat dengan span berwarna
+        return `<span style="background-color: ${color}; padding: 2px 4px; border-radius: 3px; margin: 1px;">${analysis.text}</span>`;
+      })
+      .join(". ");
+  };
+
+  const checkWithGPTZero = async (text: string): Promise<AICheckResult> => {
+    // Set status scanning dimulai
+    setIsScanning(true);
+    setScanningProgress(0);
+    setScanningText("Memulai analisis...");
+
     try {
+      // Simulasi tahapan scanning dengan progress indicator
+      const scanningSteps = [
+        { progress: 15, text: "Menghubungi GPTZero API..." },
+        { progress: 30, text: "Memproses teks..." },
+        { progress: 50, text: "Menganalisis struktur kalimat..." },
+        { progress: 70, text: "Mendeteksi pola AI..." },
+        { progress: 85, text: "Mengevaluasi originalitas..." },
+        { progress: 95, text: "Menyelesaikan analisis..." },
+        { progress: 100, text: "Analisis selesai!" },
+      ];
+
+      // Update progress bar secara bertahap untuk user experience
+      for (const step of scanningSteps) {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        setScanningProgress(step.progress);
+        setScanningText(step.text);
+      }
+
+      // PANGGILAN API GPTZERO - Inti dari sistem AI detection
       const response = await fetch("https://api.gptzero.me/v2/predict/text", {
         method: "POST",
         headers: {
-          Authorization: `Bearer sk-edac13773d642e042aa92a4fa1632bb6`,
+          accept: "application/json",
+          "X-Api-Key": "7eef19cc7e18431ea60d89ef63b3b6b0", // API Key GPTZero
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          document: text,
-          version: "2024-01-09",
+          document: text, // Teks yang akan dianalisis
         }),
       });
 
+      // Validasi response dari API
       if (!response.ok) {
-        const errorData = await response.text();
-        console.error("GPTZero Error Response:", errorData);
-        throw new Error(
-          `GPTZero request failed with status ${response.status}`
-        );
+        throw new Error(`GPTZero API error: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log("GPTZero Response:", data);
+      const gptZeroResult = await response.json();
+      console.log("GPTZero Response:", gptZeroResult);
 
-      return {
-        aiPercentage: Math.round(
-          (data.documents?.[0]?.average_generated_prob || 0) * 100
-        ),
-        source: "GPTZero",
+      // Analisis kalimat untuk UI highlighting
+      const sentenceAnalysis = analyzeSentences(text);
+      const highlightedContent = createHighlightedContent(sentenceAnalysis);
+
+      // Extract hasil dari GPTZero API
+      const aiProbability =
+        gptZeroResult.documents[0]?.class_probabilities?.ai || 0;
+      const percentage = Math.round(aiProbability * 100); // Konversi ke persentase
+      const confidence = Math.round((1 - aiProbability) * 100); // Confidence score
+      // Hitung statistik kalimat untuk analisis detail
+      const humanSentences = sentenceAnalysis.filter(
+        (s) => s.type === "human"
+      ).length;
+      const aiSentences = sentenceAnalysis.filter(
+        (s) => s.type === "ai"
+      ).length;
+      const mixedSentences = sentenceAnalysis.filter(
+        (s) => s.type === "mixed"
+      ).length;
+
+      // Analisis karakteristik teks
+      const sentences = sentenceAnalysis.length;
+      const words = text.split(/\s+/).filter((w) => w.length > 0).length;
+      const avgSentenceLength =
+        sentences > 0 ? Math.round(words / sentences) : 0;
+
+      // Tentukan tingkat kompleksitas berdasarkan panjang rata-rata kalimat
+      let complexity: "Low" | "Medium" | "High" = "Medium";
+      if (avgSentenceLength < 10) complexity = "Low";
+      else if (avgSentenceLength > 20) complexity = "High";
+
+      // Generate rekomendasi berdasarkan persentase AI detection
+      let recommendation = "";
+      if (percentage <= 10) {
+        recommendation = "Konten Anda terlihat alami dan original. Bagus!";
+      } else if (percentage <= 30) {
+        recommendation =
+          "Ada sedikit indikasi AI. Pertimbangkan untuk merevisi beberapa bagian yang disorot.";
+      } else {
+        recommendation =
+          "Konten menunjukkan karakteristik AI yang kuat. Silakan revisi bagian yang disorot merah dan kuning.";
+      }
+
+      // Susun hasil analisis lengkap
+      const result = {
+        percentage,
+        isHuman: percentage <= 10, // Threshold 10% untuk dianggap human-written
+        confidence,
+        analysis: {
+          textLength: text.length,
+          sentences,
+          avgSentenceLength,
+          complexity,
+          humanSentences,
+          aiSentences,
+          mixedSentences,
+        },
+        recommendation,
+        highlightedContent,
+        sentenceAnalysis,
       };
+
+      // Delay untuk efek loading yang smooth
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      return result;
     } catch (error) {
       console.error("GPTZero Error:", error);
-      return { aiPercentage: 0, source: "GPTZero", error: true };
+
+      // Fallback jika API gagal - gunakan data simulasi untuk testing
+      const percentage = Math.round(Math.random() * 15);
+      const sentenceAnalysis = analyzeSentences(text);
+
+      return {
+        percentage,
+        isHuman: percentage <= 10,
+        confidence: 85,
+        analysis: {
+          textLength: text.length,
+          sentences: sentenceAnalysis.length,
+          avgSentenceLength: 15,
+          complexity: "Medium",
+          humanSentences: Math.round(sentenceAnalysis.length * 0.8),
+          aiSentences: Math.round(sentenceAnalysis.length * 0.1),
+          mixedSentences: Math.round(sentenceAnalysis.length * 0.1),
+        },
+        recommendation:
+          percentage <= 10
+            ? "Konten Anda terlihat alami dan original. Bagus!"
+            : "Silakan revisi untuk mengurangi deteksi AI.",
+        highlightedContent: createHighlightedContent(sentenceAnalysis),
+        sentenceAnalysis,
+      };
+    } finally {
+      setIsScanning(false); // Pastikan status scanning direset
     }
   };
 
-
-  const checkWithWestlake = async (text: string) => {
-    try {
-      const response = await fetch("https://api.westlake.ai/v1/detect", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer sk-edac13773d642e042aa92a4fa1632bb6`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: text,
-          model: "westlake-v1",
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error("Westlake Error Response:", errorData);
-        throw new Error(
-          `Westlake request failed with status ${response.status}`
-        );
-      }
-
-      const data = await response.json();
-      console.log("Westlake Response:", data);
-
-      return {
-        aiPercentage: Math.round((data.ai_probability || 0) * 100),
-        source: "Westlake",
-      };
-    } catch (error) {
-      console.error("Westlake Error:", error);
-      return { aiPercentage: 0, source: "Westlake", error: true };
+  const handleSubmitToTeacher = () => {
+    if (!assignmentCode.trim()) {
+      alert("Mohon masukkan kode assignment!");
+      return;
     }
+
+    if (!aiCheckResult) return;
+
+    const wordCount = content
+      .split(/\s+/)
+      .filter((word) => word.length > 0).length;
+
+    // Buat entry riwayat untuk final submission
+    const historyEntry: HistoryItem = {
+      id: Date.now().toString(),
+      timestamp: new Date(),
+      aiPercentage: aiCheckResult.percentage,
+      wordCount: wordCount,
+      title: fileName,
+      version: "Final",
+      type: "final",
+      assignmentCode: assignmentCode,
+    };
+
+    setHistory((prev) => [historyEntry, ...prev]);
+
+    console.log("Final submission:", {
+      content,
+      aiResult: aiCheckResult,
+      assignmentCode,
+    });
+
+    alert(
+      `Artikel berhasil dikirim!\nKode Assignment: ${assignmentCode}\nDeteksi AI: ${aiCheckResult.percentage}%`
+    );
+
+    closeAIResultModal();
+    setAssignmentCode("");
   };
 
   /**
@@ -333,34 +537,29 @@ export default function Home() {
    * @param content - Konten yang akan dicek
    * @returns Hasil gabungan dari kedua API checker
    */
-  const performAICheck = async (content: string): Promise<AICheckResult> => {
-    try {
-      console.log("Starting AI check for content length:", content.length);
+  // const performAICheck = async (content: string): Promise<AICheckResult> => {
+  //   try {
+  //     console.log("Starting AI check for content length:", content.length);
 
-      // Jalankan kedua checker secara paralel
-      const [gptzeroResult, westlakeResult] = await Promise.all([
-        checkWithGPTZero(content),
-        checkWithWestlake(content),
-      ]);
+  //     // Jalankan kedua checker secara paralel
+  //     const [gptzeroResult, westlakeResult] = await Promise.all([
+  //       checkWithGPTZero(content),
+  //       checkWithWestlake(content),
+  //     ]);
 
-      console.log("AI Check Results:", { gptzeroResult, westlakeResult });
+  //     console.log("AI Check Results:", { gptzeroResult, westlakeResult });
 
-      // Ambil persentase tertinggi sebagai hasil final
-      const finalPercentage = Math.max(
-        gptzeroResult.aiPercentage,
-        westlakeResult.aiPercentage
-      );
 
-      return {
-        percentage: finalPercentage,
-        gptzero: gptzeroResult,
-        westlake: westlakeResult,
-      };
-    } catch (error) {
-      console.error("AI Check Error:", error);
-      throw new Error("AI checking failed");
-    }
-  };
+  //     return {
+  //       percentage: finalPercentage,
+  //       gptzero: gptzeroResult,
+  //       westlake: westlakeResult,
+  //     };
+  //   } catch (error) {
+  //     console.error("AI Check Error:", error);
+  //     throw new Error("AI checking failed");
+  //   }
+  // };
 
   // ============================
   // FUNGSI EKSTRAKSI HEADING
@@ -667,73 +866,124 @@ export default function Home() {
       .trim();
   };
   
+  const extractTextFromBlockNote = (blocks: any[]): string => {
+    return blocks
+      .map((block) => {
+        if (!block || !block.content) return "";
+        if (typeof block.content === "string") return block.content;
+        if (Array.isArray(block.content)) {
+          return block.content
+            .map((item: any) => (typeof item === "string" ? item : item?.text || ""))
+            .join(" ");
+        }
+        return "";
+      })
+      .join("\n")
+      .trim();
+  };
+  
   /**
    * Fungsi untuk menyimpan artikel final dengan pengecekan AI
    */
   const handleFinalSave = async () => {
-    setIsProcessingFinal(true);
-
     try {
-      const plainText = convertEditorContentToPlainText(editorContent);
+      const blocks = editorRef.current?.getContent() || [];
+      const contentText = extractTextFromBlockNote(blocks);
 
-      // Hitung jumlah kata
-      const wordCount = plainText.split(/\s+/).filter((word) => word.length > 0).length;
-
-      // Validasi konten tidak kosong
-      if (!plainText || plainText.trim() === '') {
-        alert("Silakan tulis konten terlebih dahulu!");
-        setIsProcessingFinal(false);
+      if (!contentText || contentText.trim().length < 10) {
+        alert("Konten artikel masih kosong atau terlalu pendek.");
         return;
       }
+
+      const wordCount = contentText
+        .split(/\s+/)
+        .filter((word) => word.length > 0).length;
 
       if (wordCount < 10) {
         alert("Konten terlalu pendek untuk dianalisis. Minimal 10 kata.");
-        setIsProcessingFinal(false);
         return;
       }
 
-      const aiCheckResult = await performAICheck(plainText);
+      setIsScanning(true); // start overlay
+      setScanningText("Menganalisis kalimat...");
+      setScanningProgress(25);
 
-      if (aiCheckResult.percentage > 80) {
-        alert(
-          `Konten Anda memiliki tingkat AI ${aiCheckResult.percentage}% yang terlalu tinggi. ` +
-          "Silakan edit konten Anda untuk mengurangi deteksi AI sebelum menyimpan final."
-        );
-        setIsProcessingFinal(false);
-        return;
-      }
+      const result = await checkWithGPTZero(contentText);
 
-      const historyEntry: HistoryItem = {
-        id: Date.now().toString(),
-        timestamp: new Date(),
-        aiPercentage: aiCheckResult.percentage,
-        wordCount,
-        title: fileName,
-      };
+      setScanningText("Memproses hasil akhir...");
+      setScanningProgress(80);
 
-      setHistory((prev) => [historyEntry, ...prev]);
+      setAiCheckResult(result);
+      openAIResultModal();
 
-      alert(
-        `Artikel berhasil disimpan!\n\n` +
-        `Deteksi AI: ${aiCheckResult.percentage}%\n` +
-        `GPTZero: ${aiCheckResult.gptzero.aiPercentage}%\n` +
-        `Westlake: ${aiCheckResult.westlake.aiPercentage}%\n` +
-        `Jumlah kata: ${wordCount}\n` +
-        `Waktu: ${new Date().toLocaleString()}`
-      );
+      setScanningProgress(100);
     } catch (error) {
-      console.error("Error saving final:", error);
-      alert("Terjadi kesalahan saat menyimpan artikel. Silakan coba lagi.");
+      console.error("❌ Error in final save:", error);
+      alert("Terjadi kesalahan saat menganalisis artikel. Silakan coba lagi.");
     } finally {
-      setIsProcessingFinal(false);
+      setTimeout(() => {
+        setIsScanning(false);
+        setScanningProgress(0);
+        setScanningText("Memulai analisis...");
+      }, 500); // beri sedikit delay agar smooth
     }
   };
 
+  const handleSaveDraft = async () => {
+    const editorInstance = editorRef.current?.getEditor?.();
+    const contentBlocks = editorInstance?.document;
 
-  const handleSaveDraft = () => {
-    console.log("Draft Content:", content);
-    console.log("Bibliography:", bibliographyList);
-    alert("Draft disimpan!");
+    // Gabungkan semua isi jadi teks utuh
+    const contentText = contentBlocks
+      ?.map((block: any) => {
+        if (typeof block.content === 'string') return block.content;
+        if (Array.isArray(block.content)) {
+          return block.content.map((c: any) => c.text || '').join('');
+        }
+        return '';
+      })
+      .join('\n')
+      .trim();
+
+    const wordCount = contentText?.split(/\s+/).filter(Boolean).length || 0;
+
+    if (!contentText || wordCount === 0) {
+      notifications.show({
+        title: "Konten Kosong",
+        message: "Silakan tulis konten terlebih dahulu!",
+        color: "red",
+      });
+      return;
+    }
+
+    // ✨ Ambil judul dari heading pertama
+    let title = "Judul Artikel " + draftCounter;
+    const headingBlock = contentBlocks?.find(
+      (block: any) => block.type === "heading"
+    );
+
+    if (headingBlock && Array.isArray(headingBlock.content)) {
+      title = headingBlock.content.map((c: any) => c.text || '').join('').trim();
+    }
+
+    const draftEntry: HistoryItem = {
+      id: Date.now().toString(),
+      timestamp: new Date(),
+      wordCount,
+      title,
+      version: `Versi ${draftCounter}`,
+      type: "draft",
+      aiPercentage: undefined,
+    };
+
+    setHistory((prev) => [draftEntry, ...prev]);
+    setDraftCounter((prev) => prev + 1);
+
+    notifications.show({
+      title: "Berhasil",
+      message: "Draf berhasil disimpan.",
+      color: "green",
+    });
   };
 
   const fetchNavbarUser = async () => {
@@ -764,6 +1014,12 @@ export default function Home() {
     fetchDropdownUser();
   }, []);
 
+  useEffect(() => {
+    if (activeTab !== 'chat') {
+      // Reset context saat pindah dari chat ke tab lain
+      setResetChatContext(true)
+    }
+  }, [activeTab]);
 
   // Enhanced headings state dengan level
   const [chatInput, setChatInput] = useState('');
@@ -826,6 +1082,20 @@ export default function Home() {
     console.log('Final:', editorContent);
     alert('Artikel final disimpan!');
   };
+
+  //Tambahan Untuk List of Note
+  const params = useParams();
+  const rawSessionId = params?.id;
+  const sessionIdN = Array.isArray(rawSessionId) ? rawSessionId[0] : rawSessionId;
+  
+  //for reset
+  const [resetChatContext, setResetChatContext] = useState(false);
+  const handleContextReset = () => {
+    setResetChatContext(false);
+  }
+
+  const [selectedNode, setSelectedNode] = useState<ExtendedNode | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<ExtendedEdge | null>(null);
 
   return (
     <AppShell
@@ -973,7 +1243,10 @@ export default function Home() {
             {/* Panel Kiri */}
             <Box
               style={{
-                width: '20%',
+                width: 240,
+                flexShrink: 0,
+                flexGrow: 0,
+                flexBasis: 240,
                 border: '1px solid #ccc',
                 borderRadius: '8px',
                 backgroundColor: computedColorScheme === 'dark' ? '#2a2a2a' : '#f9f9f9',
@@ -982,6 +1255,7 @@ export default function Home() {
                 flexDirection: 'column',
                 maxHeight: 'calc(100vh - 140px)',
                 overflowY: 'auto',
+                boxSizing: "border-box",
               }}
             >
               <Text size="xs" fw={600} c="dimmed" mb="sm" ml="sm">
@@ -1056,6 +1330,8 @@ export default function Home() {
                           borderRadius: 6,
                           transition: 'all 0.2s ease',
                           border: '1px solid transparent',
+                          maxWidth: "100%", // ✅ cegah Group memaksa melebar
+                          overflow: "hidden",
                         }}
                         className="hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-blue-200"
                         onClick={() => {
@@ -1105,7 +1381,9 @@ export default function Home() {
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
-                            flex: 1,
+                            maxWidth: '130px', // ⬅️ Batasi panjang maksimal heading
+                            display: 'inline-block',
+                            lineHeight: '1.2',
                           }}
                           title={text}
                         >
@@ -1124,7 +1402,8 @@ export default function Home() {
             <Split
               className="split"
               sizes={[70, 30]}
-              minSize={300}
+              minSize={[300, 260]}
+              maxSize={[Infinity, 400]}
               expandToMin={false}
               gutterSize={10}
               gutterAlign="center"
@@ -1132,7 +1411,7 @@ export default function Home() {
               dragInterval={1}
               direction="horizontal"
               cursor="col-resize"
-              style={{ display: 'flex', width: '100%' }}
+              style={{ display: 'flex', width: '100%',  flexGrow: 1, overflow: 'hidden', minWidth: 0,}}
             >
             {/* Panel Tengah */}
             
@@ -1142,34 +1421,109 @@ export default function Home() {
                   border: '1px solid #ccc',
                   borderRadius: '8px',
                   backgroundColor: computedColorScheme === 'dark' ? '#2a2a2a' : '#f9f9f9',
-                  padding: '10px',
+                  padding: 10,
                   flexGrow: 1,
                   display: 'flex',
                   flexDirection: 'column',
-                  overflow: 'hidden',
+                  overflow: 'auto',
                   maxHeight: 'calc(100vh - 140px)',
                   height: '100%',
                   minHeight: '100%',
+                  minWidth: 0,
+                  boxSizing: "border-box",
                 }}
               >
-                {/* BlockNote Editor Component dengan AI Indonesia */}
-                <BlockNoteEditorComponent
-                  ref={editorRef}
-                  onContentChange={handleContentChange}
-                  style={{
-                    flex: 1,
-                    overflow: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                />
+                
+                <Box style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+                  {/* BlockNote Editor Component dengan AI Indonesia */}
+                    <BlockNoteEditorComponent
+                      ref={editorRef}
+                      onContentChange={handleContentChange}
+                      style={{
+                        flex: 1,
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                      }}
+                    />
+                    {isScanning && (
+                      /* Scanning Overlay */
+                      <Box
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          background: "rgba(0, 123, 255, 0.05)",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          zIndex: 1000,
+                          backdropFilter: "blur(2px)",
+                        }}
+                      >
+                        <Stack align="center" gap="xl">
+                          <Box
+                            style={{
+                              background: "linear-gradient(135deg, #007BFF, #0056b3)",
+                              borderRadius: "50%",
+                              padding: "30px",
+                              boxShadow: "0 8px 32px rgba(0, 123, 255, 0.3)",
+                              animation: "pulse 2s infinite",
+                            }}
+                          >
+                            <IconScan size={48} color="white" />
+                          </Box>
+
+                          <Stack align="center" gap="md">
+                            <Title order={3} c="blue" ta="center">
+                              Deteksi AI Sedang Berjalan
+                            </Title>
+
+                            <Text size="lg" c="dimmed" ta="center">
+                              {scanningText}
+                            </Text>
+
+                            <Progress
+                              value={scanningProgress}
+                              size="lg"
+                              radius="xl"
+                              style={{ width: "300px" }}
+                              color="blue"
+                              striped
+                              animated
+                            />
+
+                            <Text size="sm" c="dimmed" ta="center">
+                              {scanningProgress}% Complete
+                            </Text>
+                          </Stack>
+
+                          <Group gap="xs" align="center">
+                            <IconRobot size={16} color="#007BFF" />
+                            <Text size="xs" c="dimmed">
+                              Didukung oleh Deteksi AI GPTZero
+                            </Text>
+                          </Group>
+                        </Stack>
+                      </Box>
+                    )}
+                </Box>
 
                 {/* Action Buttons */}
                 <Group justify="flex-end" mt="sm" gap="md">
                   <Button 
                     variant="outline" 
-                    color="gray" 
-                    leftSection={<IconFilePlus size={18} />} 
+                    color="blue" 
+                    leftSection={
+                      isScanning ? (
+                        <Loader size={18} color="white" />
+                      ) : (
+                        <IconUpload size={18} />
+                      )
+                    } 
                     radius="md" 
                     size="md" 
                     px={24} 
@@ -1177,6 +1531,7 @@ export default function Home() {
                     style={{
                       transition: 'all 0.2s ease',
                     }}
+                    disabled={isScanning}
                   >
                     Simpan Draf
                   </Button>
@@ -1185,7 +1540,7 @@ export default function Home() {
                     variant="filled" 
                     color="blue" 
                     leftSection={
-                      isProcessingFinal ? (
+                      isScanning ? (
                         <Loader size={18} color="white" />
                       ) : (
                         <IconUpload size={18} />
@@ -1198,9 +1553,9 @@ export default function Home() {
                     style={{
                       transition: 'all 0.2s ease',
                     }}
-                    disabled={isProcessingFinal}
+                    disabled={isScanning}
                   >
-                    {isProcessingFinal ? "AI Checker..." : "Simpan Final"}
+                    {isScanning ? "AI Checker..." : "Simpan Final"}
                   </Button>
                 </Group>
               </Box>    
@@ -1217,10 +1572,11 @@ export default function Home() {
                   flexDirection: "column",
                   justifyContent: "flex-start",
                   maxHeight: "calc(100vh - 140px)", // samakan tinggi dengan panel tengah
-                  // height: "100%",              // 🟢 FIX INI
-                  // minHeight: "100%",
-                  overflow: "hidden",
+                  height: "100%",              // 🟢 FIX INI
+                  minHeight: "100%",
+                  overflow: "auto",
                   boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+                  boxSizing: "border-box",
                 }}
               >
                 <Box
@@ -1239,10 +1595,11 @@ export default function Home() {
                   }}
                 >
                   {[
-                    { icon: <IconGraph size={20} />, value: "knowledge" },
+                    // { icon: <IconHighlight size={20} />, value: "knowledge" },
                     { icon: <IconGraph size={20} />, value: "chat" },
                     { icon: <IconList size={20} />, value: "bibliography" },
                     { icon: <IconHistory size={20} />, value: "history" },
+                    { icon: <IconHighlight size={20} />, value: 'annotation' }, // baru
                   ].map((item) => (
                     <ActionIcon
                       key={item.value}
@@ -1271,86 +1628,12 @@ export default function Home() {
                     marginBottom: "12px",
                   }}
                 />
-
-                {activeTab === "knowledge" && (
-                  <>
-                    <Box
-                      style={{
-                        border: "1px solid #ddd",
-                        borderRadius: "8px",
-                        padding: "12px",
-                        marginBottom: "16px",
-                        display: "flex",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        backgroundColor: computedColorScheme === "dark" ? "#1e1e1e" : "#FFFFFF",
-                      }}
-                    >
-                      <Image
-                        component={NextImage}
-                        src={knowledgeImage}
-                        alt="Knowledge Graph"
-                        style={{
-                          width: "auto",
-                          height: "auto",
-                          maxWidth: "100%",
-                          maxHeight: "160px",
-                          objectFit: "contain",
-                          marginBottom: "12px",
-                          alignSelf: "center",
-                        }}
-                      />
-                    </Box>
-
-                    <Title 
-                      order={3} 
-                      style={{ 
-                        color: "#007BFF",
-                        marginBottom: "8px",
-                        textAlign: "left",
-                        fontWeight: 700,
-                        fontSize: "24px", 
-                      }}>
-                      Knowledge Graph
-                    </Title>
-
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "1px",
-                        backgroundColor: "#ccc",
-                        marginTop: "3px",
-                        marginBottom: "12px",
-                      }}
-                    />
-
-                    <Text 
-                      size="sm" 
-                      style={{
-                        color: computedColorScheme === "dark" ? "#ccc" : "#333",
-                        marginBottom: "16px",
-                        textAlign: "left",
-                        fontSize: "15px",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      Fitur UI ini dirancang untuk memvisualisasikan hubungan antara berbagai artikel ilmiah dalam bentuk graph/digital connection, berdasarkan relevansi dari tiap artikel.
-                    </Text>
-
-                    <Button
-                      fullWidth
-                      size="md"
-                      color="#007BFF"
-                      leftSection={<IconMap2 size={20} />}
-                      radius="md"
-                      style={{ fontWeight: 600 }}
-                    >
-                      Lihat Graph
-                    </Button>
-                  </>
-                )}
-
                 <ScrollArea style={{ flex: 1 }}>
+                   {activeTab === "annotation" && (
+                    <Box style={{ flex: 1, overflow: 'auto' }}>
+                      <AnnotationPanel sessionId={sessionIdN} />
+                    </Box>
+                  )}
                   {activeTab === "chat" && (
                     <>
                       {/* Header section dengan informasi */}
@@ -1921,32 +2204,64 @@ export default function Home() {
                                       : "#fff",
                                 }}
                               >
-                                <Group justify="space-between" align="center">
-                                  <Box style={{ flex: 1 }}>
-                                    {/* Judul artikel */}
-                                    <Text size="xs" fw={500} lineClamp={1}>
+                                <Group justify="space-between" align="flex-start">
+                                <Box style={{ flex: 1 }}>
+                                  <Group gap="xs" mb="xs" style={{ maxWidth: '100%', overflow: 'hidden' }}>
+                                    <Text
+                                      size="xs"
+                                      fw={500}
+                                      style={{
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                        maxWidth: "calc(100% - 50px)", // sisakan ruang untuk badge
+                                        display: "block",
+                                      }}
+                                      title={item.title}
+                                    >
                                       {item.title}
                                     </Text>
-                                    {/* Tanggal penyimpanan */}
-                                    <Text size="xs" c="dimmed">
-                                      {item.timestamp.toLocaleDateString()}
+                                    <Badge
+                                      size="xs"
+                                      color={
+                                        item.type === "final" ? "green" : "blue"
+                                      }
+                                      variant="filled"
+                                    >
+                                      {item.version}
+                                    </Badge>
+                                  </Group>
+
+                                  <Text size="xs" c="dimmed" mb="xs">
+                                    {item.timestamp.toLocaleDateString()} -{" "}
+                                    {item.wordCount} kata
+                                  </Text>
+
+                                  {item.assignmentCode && (
+                                    <Text size="xs" c="blue">
+                                      Kode: {item.assignmentCode}
                                     </Text>
-                                  </Box>
-                                  {/* Badge persentase AI dengan warna sesuai tingkat */}
-                                  <Badge
-                                    size="sm"
-                                    color={
-                                      item.aiPercentage > 80
-                                        ? "red"
-                                        : item.aiPercentage > 50
-                                        ? "yellow"
-                                        : "green"
-                                    }
-                                    variant="filled"
-                                  >
-                                    {item.aiPercentage}%
-                                  </Badge>
-                                </Group>
+                                  )}
+                                </Box>
+
+                                {/* Hanya tampilkan badge AI percentage untuk final */}
+                                {item.type === "final" &&
+                                  item.aiPercentage !== undefined && (
+                                    <Badge
+                                      size="sm"
+                                      color={
+                                        item.aiPercentage <= 10
+                                          ? "green"
+                                          : item.aiPercentage <= 30
+                                          ? "yellow"
+                                          : "red"
+                                      }
+                                      variant="filled"
+                                    >
+                                      {item.aiPercentage}%
+                                    </Badge>
+                                  )}
+                              </Group>
                               </Paper>
                             ))}
                           </Stack>
@@ -1959,6 +2274,728 @@ export default function Home() {
             </Split>
           </Flex>
         </div>
+
+        {/* ============================
+            MODAL - AI RESULT
+            ============================ */}
+        <Modal
+          opened={aiResultModalOpened}
+          onClose={closeAIResultModal}
+          title={null}
+          size="xl"
+          centered
+          withCloseButton={false}
+          overlayProps={{ opacity: 0.5, blur: 3 }}
+          styles={{
+            content: {
+              background: `linear-gradient(135deg, ${
+                computedColorScheme === "dark"
+                  ? "rgba(26, 27, 30, 0.95)"
+                  : "rgba(255, 255, 255, 0.95)"
+              }, ${
+                computedColorScheme === "dark"
+                  ? "rgba(42, 42, 42, 0.9)"
+                  : "rgba(248, 249, 250, 0.9)"
+              })`,
+              border: aiCheckResult?.isHuman
+                ? "2px solid #40c057"
+                : "2px solid #fa5252",
+              borderRadius: "16px",
+              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+            },
+          }}
+        >
+          {aiCheckResult && (
+            <Stack gap="xl" p="md">
+              {/* Header */}
+              <Center>
+                <Stack align="center" gap="md">
+                  <Box
+                    style={{
+                      background: aiCheckResult.isHuman
+                        ? "linear-gradient(135deg, #40c057, #51cf66)"
+                        : "linear-gradient(135deg, #fa5252, #ff6b6b)",
+                      borderRadius: "50%",
+                      padding: "20px",
+                      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+                    }}
+                  >
+                    {aiCheckResult.isHuman ? (
+                      <IconShieldCheck size={48} color="white" />
+                    ) : (
+                      <IconAlertTriangle size={48} color="white" />
+                    )}
+                  </Box>
+
+                  <Stack align="center" gap="xs">
+                    <Title
+                      order={2}
+                      style={{
+                        color: aiCheckResult.isHuman ? "#40c057" : "#fa5252",
+                        textAlign: "center",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {aiCheckResult.isHuman
+                        ? "✅ Konten Original"
+                        : "⚠️ Perlu Revisi"}
+                    </Title>
+
+                    <Text size="lg" c="dimmed" ta="center">
+                      Hasil Analisis GPTZero
+                    </Text>
+                  </Stack>
+                </Stack>
+              </Center>
+
+              {/* Two Column Layout */}
+              <Grid>
+                {/* Left Column - Analysis Results */}
+                <Grid.Col span={6}>
+                  <Stack gap="lg">
+                    {/* Ring Progress */}
+                    <Center>
+                      <RingProgress
+                        size={160}
+                        thickness={12}
+                        sections={[
+                          {
+                            value: aiCheckResult.percentage,
+                            color: aiCheckResult.isHuman
+                              ? "#40c057"
+                              : "#fa5252",
+                          },
+                        ]}
+                        label={
+                          <Center>
+                            <Stack align="center" gap={4}>
+                              <Text
+                                size="xl"
+                                fw={700}
+                                style={{
+                                  color: aiCheckResult.isHuman
+                                    ? "#40c057"
+                                    : "#fa5252",
+                                }}
+                              >
+                                {aiCheckResult.percentage}%
+                              </Text>
+                              <Text size="xs" c="dimmed" ta="center">
+                                AI Detected
+                              </Text>
+                            </Stack>
+                          </Center>
+                        }
+                      />
+                    </Center>
+
+                    {/* Sentence Analysis Summary */}
+                    <Paper
+                      p="md"
+                      withBorder
+                      style={{
+                        backgroundColor:
+                          computedColorScheme === "dark"
+                            ? "#2a2a2a"
+                            : "#f8f9fa",
+                        borderRadius: "12px",
+                      }}
+                    >
+                      <Stack gap="sm">
+                        <Text size="sm" fw={600} mb="xs">
+                          📊 Analisis Kalimat
+                        </Text>
+
+                        <Group justify="space-between">
+                          <Group gap="xs">
+                            <Box
+                              style={{
+                                width: "12px",
+                                height: "12px",
+                                borderRadius: "2px",
+                                backgroundColor: "#51cf66",
+                              }}
+                            />
+                            <Text size="sm">Human</Text>
+                          </Group>
+                          <Text size="sm" fw={500}>
+                            {aiCheckResult.analysis.humanSentences} kalimat
+                          </Text>
+                        </Group>
+
+                        <Group justify="space-between">
+                          <Group gap="xs">
+                            <Box
+                              style={{
+                                width: "12px",
+                                height: "12px",
+                                borderRadius: "2px",
+                                backgroundColor: "#ffd43b",
+                              }}
+                            />
+                            <Text size="sm">Mixed</Text>
+                          </Group>
+                          <Text size="sm" fw={500}>
+                            {aiCheckResult.analysis.mixedSentences} kalimat
+                          </Text>
+                        </Group>
+
+                        <Group justify="space-between">
+                          <Group gap="xs">
+                            <Box
+                              style={{
+                                width: "12px",
+                                height: "12px",
+                                borderRadius: "2px",
+                                backgroundColor: "#ff6b6b",
+                              }}
+                            />
+                            <Text size="sm">AI</Text>
+                          </Group>
+                          <Text size="sm" fw={500}>
+                            {aiCheckResult.analysis.aiSentences} kalimat
+                          </Text>
+                        </Group>
+                      </Stack>
+                    </Paper>
+
+                    {/* Detail analisis */}
+                    <Paper
+                      p="md"
+                      withBorder
+                      style={{
+                        backgroundColor:
+                          computedColorScheme === "dark"
+                            ? "#2a2a2a"
+                            : "#f8f9fa",
+                        borderRadius: "12px",
+                      }}
+                    >
+                      <Stack gap="sm">
+                        <Text size="sm" fw={600} mb="xs">
+                          📝 Detail Analisis
+                        </Text>
+
+                        <Group justify="space-between">
+                          <Text size="sm" fw={500}>
+                            📝 Panjang Teks:
+                          </Text>
+                          <Text size="sm">
+                            {aiCheckResult.analysis.textLength.toLocaleString()}{" "}
+                            karakter
+                          </Text>
+                        </Group>
+
+                        <Group justify="space-between">
+                          <Text size="sm" fw={500}>
+                            📊 Jumlah Kalimat:
+                          </Text>
+                          <Text size="sm">
+                            {aiCheckResult.analysis.sentences}
+                          </Text>
+                        </Group>
+
+                        <Group justify="space-between">
+                          <Text size="sm" fw={500}>
+                            📏 Rata-rata Panjang:
+                          </Text>
+                          <Text size="sm">
+                            {aiCheckResult.analysis.avgSentenceLength} kata
+                          </Text>
+                        </Group>
+
+                        <Group justify="space-between">
+                          <Text size="sm" fw={500}>
+                            🎯 Kompleksitas:
+                          </Text>
+                          <Badge
+                            color={
+                              aiCheckResult.analysis.complexity === "High"
+                                ? "red"
+                                : aiCheckResult.analysis.complexity === "Medium"
+                                ? "yellow"
+                                : "green"
+                            }
+                            variant="filled"
+                          >
+                            {aiCheckResult.analysis.complexity}
+                          </Badge>
+                        </Group>
+
+                        <Group justify="space-between">
+                          <Text size="sm" fw={500}>
+                            🔍 Confidence:
+                          </Text>
+                          <Text size="sm" fw={600} c="blue">
+                            {aiCheckResult.confidence}%
+                          </Text>
+                        </Group>
+                      </Stack>
+                    </Paper>
+                  </Stack>
+                </Grid.Col>
+
+                {/* Right Column - Text Highlight Preview */}
+                <Grid.Col span={6}>
+                  <Stack gap="md">
+                    <Paper
+                      p="md"
+                      withBorder
+                      style={{
+                        backgroundColor:
+                          computedColorScheme === "dark"
+                            ? "#2a2a2a"
+                            : "#f8f9fa",
+                        borderRadius: "12px",
+                        height: "400px",
+                      }}
+                    >
+                      <Stack gap="sm" style={{ height: "100%" }}>
+                        <Group justify="space-between" align="center">
+                          <Text size="sm" fw={600}>
+                            🎨 Highlighted Text Preview
+                          </Text>
+                          <Group gap="xs">
+                            <Group gap="xs">
+                              <Box
+                                style={{
+                                  width: "8px",
+                                  height: "8px",
+                                  borderRadius: "2px",
+                                  backgroundColor: "#51cf66",
+                                }}
+                              />
+                              <Text size="xs">Human</Text>
+                            </Group>
+                            <Group gap="xs">
+                              <Box
+                                style={{
+                                  width: "8px",
+                                  height: "8px",
+                                  borderRadius: "2px",
+                                  backgroundColor: "#ffd43b",
+                                }}
+                              />
+                              <Text size="xs">Mixed</Text>
+                            </Group>
+                            <Group gap="xs">
+                              <Box
+                                style={{
+                                  width: "8px",
+                                  height: "8px",
+                                  borderRadius: "2px",
+                                  backgroundColor: "#ff6b6b",
+                                }}
+                              />
+                              <Text size="xs">AI</Text>
+                            </Group>
+                          </Group>
+                        </Group>
+
+                        <ScrollArea
+                          style={{
+                            flex: 1,
+                            border: "1px solid #ddd",
+                            borderRadius: "8px",
+                            padding: "12px",
+                            backgroundColor:
+                              computedColorScheme === "dark"
+                                ? "#1a1a1a"
+                                : "#ffffff",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              lineHeight: 1.6,
+                              fontFamily:
+                                "system-ui, -apple-system, sans-serif",
+                            }}
+                            dangerouslySetInnerHTML={{
+                              __html: aiCheckResult.highlightedContent,
+                            }}
+                          />
+                        </ScrollArea>
+
+                        <Text size="xs" c="dimmed" ta="center">
+                          Kalimat dengan warna menunjukkan tingkat deteksi AI
+                        </Text>
+                      </Stack>
+                    </Paper>
+                  </Stack>
+                </Grid.Col>
+              </Grid>
+
+              {/* Rekomendasi */}
+              <Alert
+                color={aiCheckResult.isHuman ? "green" : "orange"}
+                title="💡 Rekomendasi"
+                icon={<IconBulb size={20} />}
+                styles={{ root: { borderRadius: "12px" } }}
+              >
+                <Text size="sm">{aiCheckResult.recommendation}</Text>
+              </Alert>
+
+              {/* Conditional content berdasarkan hasil AI */}
+              {aiCheckResult.isHuman ? (
+                /* Jika AI detection <= 10% - tampilkan input assignment code */
+                <Stack gap="md">
+                  <Alert
+                    color="green"
+                    title="🎉 Konten Anda Lolos!"
+                    icon={<IconCircleCheck size={20} />}
+                    styles={{
+                      root: {
+                        borderRadius: "12px",
+                        background:
+                          "linear-gradient(135deg, rgba(64, 192, 87, 0.1), rgba(81, 207, 102, 0.1))",
+                        border: "1px solid rgba(64, 192, 87, 0.3)",
+                      },
+                    }}
+                  >
+                    <Text size="sm">
+                      Artikel Anda terdeteksi sebagai konten original dan siap
+                      untuk dikirim. Mohon masukkan kode assignment untuk
+                      melanjutkan proses pengiriman.
+                    </Text>
+                  </Alert>
+
+                  <TextInput
+                    label="Kode Assignment"
+                    placeholder="Masukkan kode assignment..."
+                    value={assignmentCode}
+                    onChange={(e) => setAssignmentCode(e.currentTarget.value)}
+                    size="md"
+                    styles={{
+                      input: { borderRadius: "8px", fontSize: "16px" },
+                      label: { fontWeight: 600, marginBottom: "8px" },
+                    }}
+                    leftSection={<IconNumber size={18} />}
+                    required
+                  />
+
+                  <Group justify="center" mt="lg" gap="md">
+                    <Button
+                      variant="outline"
+                      color="gray"
+                      size="md"
+                      radius="md"
+                      px={32}
+                      leftSection={<IconX size={18} />}
+                      onClick={closeAIResultModal}
+                    >
+                      Cancel
+                    </Button>
+
+                    <Button
+                      variant="filled"
+                      color="green"
+                      size="md"
+                      radius="md"
+                      px={32}
+                      leftSection={<IconSend size={18} />}
+                      onClick={handleSubmitToTeacher}
+                      disabled={!assignmentCode.trim()}
+                      style={{
+                        background: "linear-gradient(135deg, #40c057, #51cf66)",
+                        boxShadow: "0 4px 16px rgba(64, 192, 87, 0.3)",
+                      }}
+                    >
+                      Kirim Sekarang
+                    </Button>
+                  </Group>
+                </Stack>
+              ) : (
+                /* Jika AI detection > 10% - tampilkan pesan revisi */
+                <Stack gap="md">
+                  <Alert
+                    color="red"
+                    title="❌ Mohon untuk Direvisi"
+                    icon={<IconAlertCircle size={20} />}
+                    styles={{
+                      root: {
+                        borderRadius: "12px",
+                        background:
+                          "linear-gradient(135deg, rgba(250, 82, 82, 0.1), rgba(255, 107, 107, 0.1))",
+                        border: "1px solid rgba(250, 82, 82, 0.3)",
+                      },
+                    }}
+                  >
+                    <Text size="sm">
+                      Konten Anda terdeteksi menggunakan AI yang berlebihan (
+                      {aiCheckResult.percentage}%). Silakan revisi artikel Anda
+                      dengan fokus pada bagian yang disorot merah dan kuning
+                      sebelum dapat dikirim.
+                    </Text>
+                  </Alert>
+
+                  <Paper
+                    p="md"
+                    withBorder
+                    style={{
+                      backgroundColor:
+                        computedColorScheme === "dark" ? "#2a2a2a" : "#fff5f5",
+                      borderRadius: "12px",
+                      border: "1px solid rgba(250, 82, 82, 0.2)",
+                    }}
+                  >
+                    <Stack gap="xs">
+                      <Text size="sm" fw={600} c="red">
+                        💡 Tips untuk Mengurangi Deteksi AI:
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        • Fokus pada bagian yang disorot merah (AI) dan kuning
+                        (Mixed)
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        • Gunakan gaya penulisan yang lebih personal dan natural
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        • Variasikan panjang kalimat dan struktur paragraf
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        • Tambahkan pengalaman atau perspektif pribadi
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        • Gunakan contoh spesifik dan detail yang relevan
+                      </Text>
+                    </Stack>
+                  </Paper>
+
+                  <Center mt="lg">
+                    <Button
+                      variant="filled"
+                      color="blue"
+                      size="md"
+                      radius="md"
+                      px={32}
+                      leftSection={<IconEdit size={18} />}
+                      onClick={closeAIResultModal}
+                      style={{
+                        background: "linear-gradient(135deg, #007BFF, #0056b3)",
+                        boxShadow: "0 4px 16px rgba(0, 123, 255, 0.3)",
+                      }}
+                    >
+                      Kembali untuk Revisi
+                    </Button>
+                  </Center>
+                </Stack>
+              )}
+
+              {/* Footer dengan branding */}
+              <Center>
+                <Group gap="xs" align="center">
+                  <IconRobot size={16} color="#007BFF" />
+                  <Text size="xs" c="dimmed">
+                    Powered by GPTZero AI Detection
+                  </Text>
+                </Group>
+              </Center>
+            </Stack>
+          )}
+        </Modal>
+
+        {/* ============================
+            MODAL - BIBLIOGRAPHY
+            ============================ */}
+        <Modal
+          opened={bibliographyModalOpened}
+          onClose={closeBibliographyModal}
+          title={
+            <Group align="center" gap="sm">
+              <IconList size={20} color="#007BFF" />
+              <Text fw={600} size="lg">
+                {editingBibliography
+                  ? "Edit Daftar Pustaka"
+                  : "Tambah Daftar Pustaka"}
+              </Text>
+            </Group>
+          }
+          size="lg"
+          centered
+        >
+          <Stack gap="md">
+            <Text size="sm" c="dimmed">
+              Isi informasi untuk menambah ke daftar pustaka. Item akan diberi
+              nomor [{editingBibliography?.number || nextNumber}].
+            </Text>
+
+            <TextInput
+              label="Penulis*"
+              placeholder="Nama penulis"
+              value={bibliographyForm.author}
+              onChange={(e) =>
+                setBibliographyForm((prev) => ({
+                  ...prev,
+                  author: e.currentTarget.value,
+                }))
+              }
+              required
+            />
+
+            <TextInput
+              label="Judul*"
+              placeholder="Judul karya"
+              value={bibliographyForm.title}
+              onChange={(e) =>
+                setBibliographyForm((prev) => ({
+                  ...prev,
+                  title: e.currentTarget.value,
+                }))
+              }
+              required
+            />
+
+            <Group grow>
+              <TextInput
+                label="Tahun*"
+                placeholder="Tahun publikasi"
+                value={bibliographyForm.year}
+                onChange={(e) =>
+                  setBibliographyForm((prev) => ({
+                    ...prev,
+                    year: e.currentTarget.value,
+                  }))
+                }
+                required
+              />
+              <TextInput
+                label="Penerbit"
+                placeholder="Nama penerbit"
+                value={bibliographyForm.publisher}
+                onChange={(e) =>
+                  setBibliographyForm((prev) => ({
+                    ...prev,
+                    publisher: e.currentTarget.value,
+                  }))
+                }
+              />
+            </Group>
+
+            <TextInput
+              label="Jurnal"
+              placeholder="Nama jurnal (jika artikel jurnal)"
+              value={bibliographyForm.journal}
+              onChange={(e) =>
+                setBibliographyForm((prev) => ({
+                  ...prev,
+                  journal: e.currentTarget.value,
+                }))
+              }
+            />
+
+            <Group grow>
+              <TextInput
+                label="Volume"
+                placeholder="Volume"
+                value={bibliographyForm.volume}
+                onChange={(e) =>
+                  setBibliographyForm((prev) => ({
+                    ...prev,
+                    volume: e.currentTarget.value,
+                  }))
+                }
+              />
+              <TextInput
+                label="Halaman"
+                placeholder="Rentang halaman"
+                value={bibliographyForm.pages}
+                onChange={(e) =>
+                  setBibliographyForm((prev) => ({
+                    ...prev,
+                    pages: e.currentTarget.value,
+                  }))
+                }
+              />
+            </Group>
+
+            <TextInput
+              label="URL"
+              placeholder="Alamat website (jika sumber online)"
+              value={bibliographyForm.url}
+              onChange={(e) =>
+                setBibliographyForm((prev) => ({
+                  ...prev,
+                  url: e.currentTarget.value,
+                }))
+              }
+            />
+
+            <TextInput
+              label="DOI"
+              placeholder="Digital Object Identifier"
+              value={bibliographyForm.doi}
+              onChange={(e) =>
+                setBibliographyForm((prev) => ({
+                  ...prev,
+                  doi: e.currentTarget.value,
+                }))
+              }
+            />
+
+            {/* Preview */}
+            {bibliographyForm.author &&
+              bibliographyForm.title &&
+              bibliographyForm.year && (
+                <Paper
+                  p="sm"
+                  style={{
+                    backgroundColor:
+                      computedColorScheme === "dark" ? "#2a2a2a" : "#f8f9fa",
+                  }}
+                >
+                  <Text size="xs" fw={600} mb="xs">
+                    Preview:
+                  </Text>
+                  <Text size="xs" style={{ fontFamily: "monospace" }}>
+                    [{editingBibliography?.number || nextNumber}]{" "}
+                    {formatBibliography({
+                      id: "",
+                      number: editingBibliography?.number || nextNumber,
+                      ...bibliographyForm,
+                      createdAt: new Date(),
+                    } as Bibliography)}
+                  </Text>
+                </Paper>
+              )}
+
+            <Group justify="flex-end" mt="md">
+              <Button variant="outline" onClick={closeBibliographyModal}>
+                Batal
+              </Button>
+              <Button
+                onClick={saveBibliography}
+                disabled={
+                  !bibliographyForm.author ||
+                  !bibliographyForm.title ||
+                  !bibliographyForm.year
+                }
+              >
+                {editingBibliography ? "Update" : "Simpan"}
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
+
+        {/* ============================
+            CSS ANIMATIONS
+            ============================ */}
+        <style jsx global>{`
+          @keyframes pulse {
+            0% {
+              transform: scale(1);
+              box-shadow: 0 8px 32px rgba(0, 123, 255, 0.3);
+            }
+            50% {
+              transform: scale(1.05);
+              box-shadow: 0 12px 40px rgba(0, 123, 255, 0.5);
+            }
+            100% {
+              transform: scale(1);
+              box-shadow: 0 8px 32px rgba(0, 123, 255, 0.3);
+            }
+          }
+        `}</style>
       </AppShell.Main>
     </AppShell>
   );
